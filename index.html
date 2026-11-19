@@ -287,8 +287,8 @@ main{position:relative; z-index:5;
 .step p{font-size:var(--t-sm); color:var(--soft);}
 
 /* end */
-.end h2{font-size:clamp(48px, 7vw, 120px); font-weight:500; letter-spacing:-.04em; line-height:.92;}
-.end h2 .serif{color:var(--orange);}
+.end h2{font-size:clamp(44px, 6vw, 110px); font-weight:500; letter-spacing:-.04em; line-height:.92;}
+.end h2 .serif{display:block; color:var(--orange);}
 
 
 /* régua de qualificação */
@@ -311,7 +311,7 @@ main{position:relative; z-index:5;
 .crit-r p{font-size:var(--t-sm); color:var(--soft);}
 .lib{font-size:11.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; padding:3px 10px; border-radius:999px; white-space:nowrap;}
 .lib.mql{background:var(--peach); color:var(--ink);} .lib.pri{background:rgba(255,255,255,.08); color:var(--mist); border:1px solid var(--line-2);} .lib.sql{background:var(--orange); color:var(--ink);}
-.sig{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.9fr); gap:clamp(18px, 2.4vw, 36px); align-items:start;}
+.sig{display:grid; grid-template-columns:minmax(0,1fr); gap:clamp(18px, 2.4vw, 36px); align-items:start;}
 .sig-t{font-size:var(--t-h3); font-weight:500;}
 .sig-tbl{display:flex; flex-direction:column; min-width:0;}
 .sig-row{display:grid; grid-template-columns:150px 1fr 1fr; gap:16px; padding:12px 0; border-top:1px solid var(--line); font-size:var(--t-sm); align-items:start;}
@@ -726,11 +726,11 @@ main{position:relative; z-index:5;
     <div class="cols3">
       <div class="col rv" style="--i:1"><span class="ptag">Horizon</span>
         <div class="rows sm">
-          <div class="row"><span class="no">01</span><span class="tx">Metro quadrado abaixo dos concorrentes da região</span></div>
-          <div class="row"><span class="no">02</span><span class="tx">Quitado na entrega em 60 parcelas, sem banco</span></div>
-          <div class="row"><span class="no">03</span><span class="tx">Certificações e energia solar nas áreas comuns</span></div>
-          <div class="row"><span class="no">04</span><span class="tx">Rooftop com restaurante e auditório para receber cliente</span></div>
-          <div class="row"><span class="no">05</span><span class="tx">Uma base em Maceió para quem é do interior</span></div>
+          <div class="row"><span class="no">01</span><span class="tx">O único empresarial beira-mar de Maceió</span></div>
+          <div class="row"><span class="no">02</span><span class="tx">Metro quadrado abaixo dos concorrentes da região</span></div>
+          <div class="row"><span class="no">03</span><span class="tx">Quitado na entrega em 60 parcelas, sem banco</span></div>
+          <div class="row"><span class="no">04</span><span class="tx">Certificações e energia solar nas áreas comuns</span></div>
+          <div class="row"><span class="no">05</span><span class="tx">Rooftop com restaurante e auditório para receber cliente</span></div>
         </div></div>
       <div class="col rv" style="--i:2"><span class="ptag">Up! Studios</span>
         <div class="rows sm">
@@ -819,11 +819,6 @@ main{position:relative; z-index:5;
   <div class="panel">
     <div class="head rv"><p class="eyebrow">Operação · Qualificação</p><h2 class="title">Intenção de compra, <em>em fatos que o SDR registra</em></h2></div>
     <div class="sig">
-      <div class="col rv" style="--i:1">
-        <p class="k">É SQL com os dois</p>
-        <div class="sub hot"><h3 class="sig-t">Próximo passo com data</h3><p>Aceitou reunião on-line ou visita, com data e hora.</p><span class="who">Campo: Data da reunião</span></div>
-        <div class="sub"><h3 class="sig-t">Pelo menos um sinal</h3><p>Disse ou pediu algo que só quem pensa em comprar diz ou pede.</p><span class="who">Campo: Sinais de intenção</span></div>
-      </div>
       <div class="sig-tbl rv" style="--i:2" role="table" aria-label="Sinais de intenção">
         <div class="sig-row sig-head" role="row"><span role="columnheader">Sinal</span><span role="columnheader">Conta quando</span><span role="columnheader">Não conta</span></div>
         <div class="sig-row" role="row"><b role="cell">Prazo</b><span role="cell">Diz que pretende decidir dentro do prazo <span class="ph">[a confirmar]</span></span><span class="no-c" role="cell">“Sem pressa”, “ano que vem”, “só estou olhando”</span></div>
@@ -833,26 +828,6 @@ main{position:relative; z-index:5;
       </div>
     </div>
     <p class="note rv" style="--i:3">No Kommo, o card só entra em Reunião agendada com a data e um sinal marcados. A data dessa etapa é a data do SQL.</p>
-  </div>
-</section>
-
-<!-- 22 · métricas -->
-<section class="sec" id="regua-metricas" data-side="w" data-cam="8,-0.2,16,9" data-gate="all" data-ch="Operação" data-label="Métricas">
-  <div class="panel">
-    <div class="head rv"><p class="eyebrow">Operação · Qualificação</p><h2 class="title">O que passamos a medir, <em>por produto</em></h2></div>
-    <div class="met">
-      <div class="met-c rv" style="--i:1"><b>Taxa de resposta</b><span class="f">MQL ÷ leads</span><p>Qualidade da abordagem e da nutrição</p></div>
-      <div class="met-c rv" style="--i:1"><b>MQL por origem</b><span class="f">Por campanha e criativo</span><p>Onde colocar a verba do Meta e do Google</p></div>
-      <div class="met-c rv" style="--i:2"><b>Primeiro contato</b><span class="f">MQL atendidos em até 15 min</span><p>Velocidade do SDR depois da resposta</p></div>
-      <div class="met-c key rv" style="--i:2"><b>MQL para SQL</b><span class="f">SQL ÷ MQL</span><p>Principal indicador de qualidade do lead</p></div>
-      <div class="met-c rv" style="--i:3"><b>Tempo até o SQL</b><span class="f">Mediana em dias</span><p>Tamanho do ciclo até a reunião</p></div>
-      <div class="met-c rv" style="--i:3"><b>Comparecimento</b><span class="f">Reuniões feitas ÷ SQL</span><p>Se o lead aparece no que agendou</p></div>
-      <div class="met-c rv" style="--i:4"><b>SQL para oportunidade</b><span class="f">Oportunidades ÷ SQL</span><p>Se a régua do SQL está calibrada</p></div>
-      <div class="met-c rv" style="--i:4"><b>Conversão por sinal</b><span class="f">Oportunidades ÷ SQL, por sinal</span><p>Quais sinais preveem compra</p></div>
-      <div class="met-c rv" style="--i:5"><b>Custo por SQL</b><span class="f">Investimento ÷ SQL</span><p>Custo real de uma reunião qualificada</p></div>
-      <div class="met-c rv" style="--i:5"><b>Motivos de perda</b><span class="f">Contagem por motivo</span><p>Onde o MQL trava antes do SQL</p></div>
-    </div>
-    <p class="note rv" style="--i:6">Tudo pela safra do mês em que o lead entrou, com janela igual ao ciclo de compra <span class="ph">[a confirmar]</span>: um SQL de dezembro vindo de um lead de novembro conta em novembro.</p>
   </div>
 </section>
 
@@ -884,7 +859,7 @@ main{position:relative; z-index:5;
 </section>
 
 <!-- 22 · fim -->
-<section class="sec bare-sec end" id="fim" data-side="l" data-cam="7,0,8,0" data-ch="Operação" data-label="Fim">
+<section class="sec bare-sec end" id="fim" data-side="l" data-cam="7,0,10.5,0" data-ch="Operação" data-label="Fim">
   <div class="bare">
     <p class="eyebrow rv">Markup · Trilha · Pontozero</p>
     <h2 class="rv" style="--i:1">Próxima parada: <span class="serif">campanhas no ar.</span></h2>
