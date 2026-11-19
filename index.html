@@ -1,0 +1,1517 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<title>Markup · Estratégia em 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: voo pela "trilha" — uma cena 3D fixa atravessa os capítulos enquanto painéis de vidro alternam esquerda/direita por cima dela */
+:root{
+  --bg:#121512; --bg-2:#1A1E1A; --panel:rgba(17,20,17,.68); --panel-2:rgba(255,255,255,.035);
+  --fg:#EEEBE4; --mist:#E8E8E4; --sage:#9EB4AF; --soft:#A9B2AA; --dim:#7F8A80;
+  --line:rgba(232,232,228,.12); --line-2:rgba(232,232,228,.22);
+  --orange:#ED4E23; --orange-hi:#F7A47F; --peach:#F8D3C1; --forest:#3D463C; --ink:#171A17;
+  --f-sans:'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  --f-serif:'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --t-hero:clamp(60px, 10.5vw, 184px); --t-div:clamp(64px, 12vw, 210px);
+  --t-h2:clamp(32px, 3.9vw, 60px); --t-h3:clamp(21px, 1.7vw, 27px);
+  --t-num:clamp(36px, 3.8vw, 58px); --t-body:clamp(16px, 1.2vw, 18.5px); --t-sm:14.5px; --t-lbl:12.5px;
+  --r:18px; --ease:cubic-bezier(.2,.7,.2,1);
+  color-scheme:dark;
+}
+html{scroll-behavior:auto; background:var(--bg);}
+body{background:var(--bg); color:var(--fg); font-family:var(--f-sans); font-size:var(--t-body); line-height:1.45; -webkit-font-smoothing:antialiased; overflow-x:hidden;}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:30; background:var(--bg);}
+*{box-sizing:border-box;}
+h1,h2,h3,p,ul,ol{margin:0;}
+ul,ol{padding:0; list-style:none;}
+button{font:inherit; color:inherit;}
+:focus-visible{outline:2px solid var(--orange-hi); outline-offset:3px; border-radius:6px;}
+
+/* ---------- 3D canvas ---------- */
+#gl{position:fixed; inset:0; width:100vw; height:100vh; display:block; z-index:0;}
+.vignette{position:fixed; inset:0; z-index:1; pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 45%, rgba(18,21,18,0) 55%, rgba(18,21,18,.55) 100%);}
+html.no-gl body{background:linear-gradient(150deg,#20261F 0%,#151815 50%,#2E1D14 100%) fixed;}
+html.no-gl #gl{display:none;}
+
+/* ---------- top bar ---------- */
+.top{position:fixed; top:env(safe-area-inset-top,0px); left:0; right:0; z-index:20;
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px));
+  background:linear-gradient(180deg, rgba(18,21,18,.85) 0%, rgba(18,21,18,0) 100%);}
+.top-in{display:flex; align-items:center; gap:14px; height:60px;}
+.brand{display:flex; align-items:center; gap:10px; min-width:0;}
+.brand img{width:22px; height:22px;}
+.brand b{font-weight:600; font-size:14.5px; letter-spacing:.01em; white-space:nowrap;}
+.sep{width:1px; height:16px; background:var(--line-2);}
+#curLabel{font-size:14px; color:var(--soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;}
+.top .sp{flex:1;}
+.tbtn{background:rgba(255,255,255,.06); border:1px solid var(--line); border-radius:999px; padding:7px 14px; font-size:13.5px; cursor:pointer; display:flex; gap:8px; align-items:center; transition:background .2s, border-color .2s;}
+.tbtn:hover{background:rgba(255,255,255,.12); border-color:var(--line-2);}
+.tbtn[aria-pressed="true"]{background:var(--orange); color:var(--ink); border-color:var(--orange);}
+.tbtn kbd{font-family:inherit; font-size:11.5px; opacity:.7; border:1px solid currentColor; border-radius:4px; padding:0 4px;}
+.prog{position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(255,255,255,.06);}
+.prog i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--orange),var(--orange-hi));}
+
+/* ---------- chapter rail ---------- */
+#rail{position:fixed; right:max(18px, env(safe-area-inset-right,0px)); top:50%; transform:translateY(-50%); z-index:15; display:flex; flex-direction:column; gap:6px; align-items:flex-end;}
+#rail .ch{display:none; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin-top:10px; padding-right:2px;}
+#rail button{background:none; border:0; padding:3px 0; cursor:pointer; display:flex; align-items:center; gap:10px;}
+#rail button span{font-size:12.5px; color:var(--soft); opacity:0; transform:translateX(6px); transition:opacity .2s, transform .2s; white-space:nowrap;}
+#rail button i{display:block; width:14px; height:2px; border-radius:2px; background:var(--line-2); transition:width .3s var(--ease), background .3s;}
+#rail button:hover span, #rail button:focus-visible span{opacity:1; transform:none;}
+#rail button.on i{width:30px; background:var(--orange);}
+#rail button.on span{color:var(--fg);}
+
+/* ---------- notes drawer ---------- */
+#drawer{position:fixed; z-index:25; left:max(16px, env(safe-area-inset-left,0px)); bottom:max(16px, env(safe-area-inset-bottom,0px));
+  width:min(560px, calc(100vw - 32px)); max-height:46vh; overflow:auto; background:rgba(26,30,26,.94); border:1px solid var(--line-2);
+  border-radius:var(--r); padding:18px 20px; box-shadow:0 24px 60px rgba(0,0,0,.45);}
+#drawer h4{margin:0 0 8px; font-size:var(--t-lbl); letter-spacing:.16em; text-transform:uppercase; color:var(--orange-hi); font-weight:600;}
+#drawer p{font-size:15px; line-height:1.55; color:var(--mist);}
+
+/* ---------- sections ---------- */
+main{position:relative; z-index:5;
+  padding-left:max(clamp(16px, 5vw, 96px), env(safe-area-inset-left,0px));
+  padding-right:max(clamp(16px, 5vw, 96px), env(safe-area-inset-right,0px));}
+@media (min-width:900px){ main{padding-right:max(clamp(72px, 8vw, 150px), env(safe-area-inset-right,0px));} }
+.sec{position:relative; min-height:100svh; display:flex; align-items:center; padding-block:clamp(92px, 13vh, 150px);}
+.sec[data-side="l"]{justify-content:flex-start;}
+.sec[data-side="r"]{justify-content:flex-end;}
+.sec[data-side="w"], .sec[data-side="c"]{justify-content:center;}
+.panel{width:min(100%, 600px); min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:24px;
+  padding:clamp(22px, 2.6vw, 40px); backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15);
+  box-shadow:0 30px 80px rgba(0,0,0,.35); display:flex; flex-direction:column; gap:clamp(18px, 2vw, 28px);}
+.panel.wide{width:min(100%, 780px);}
+.sec[data-side="w"] .panel{width:min(100%, 1200px);}
+.bare{width:min(100%, 1100px); display:flex; flex-direction:column; gap:clamp(20px, 3vw, 40px);}
+
+.head{display:flex; flex-direction:column; gap:12px;}
+.eyebrow{font-size:var(--t-lbl); font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--orange-hi);}
+.title{font-size:var(--t-h2); font-weight:500; letter-spacing:-.025em; line-height:1.04; text-wrap:balance;}
+.title em, .serif{font-family:var(--f-serif); font-style:italic; font-weight:400; letter-spacing:-.01em;}
+.title em{color:var(--orange-hi);}
+.lead{color:var(--soft); max-width:62ch;}
+.src{font-size:13px; color:var(--dim); line-height:1.45;}
+.note{font-size:var(--t-sm); color:var(--soft); border-left:2px solid var(--orange); padding-left:12px;}
+.ptag{display:inline-flex; align-self:flex-start; font-size:14px; font-weight:600; padding:5px 14px; border-radius:999px; background:var(--orange); color:var(--ink);}
+.tagrow{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center;}
+.k{font-size:var(--t-lbl); font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--orange-hi);}
+.muted{color:var(--soft);}
+.num{font-variant-numeric:tabular-nums;}
+
+/* hero */
+.hero .eyebrow{display:flex; gap:12px; align-items:center;}
+.hero .eyebrow img{width:28px; height:28px;}
+.hero h1{font-size:var(--t-hero); font-weight:500; letter-spacing:-.045em; line-height:.86;}
+.hero h1 .serif{display:block; color:var(--orange); padding-left:.9em; letter-spacing:-.02em; font-size:1.02em;}
+.meta{display:flex; flex-wrap:wrap; gap:16px clamp(24px, 4vw, 56px);}
+.meta div{display:flex; flex-direction:column; gap:6px; padding-top:14px; border-top:1px solid var(--line-2); min-width:180px;}
+.meta .ml{font-size:var(--t-lbl); letter-spacing:.16em; text-transform:uppercase; color:var(--sage);}
+.meta .mv{font-size:clamp(17px, 1.4vw, 21px);}
+.hint{font-size:13.5px; color:var(--dim); display:flex; gap:10px; align-items:center;}
+.hint .ln{width:44px; height:1px; background:var(--dim); position:relative; overflow:hidden;}
+.hint .ln::after{content:""; position:absolute; inset:0; background:var(--orange-hi); transform:translateX(-100%); animation:hint 2.4s var(--ease) infinite;}
+@keyframes hint{to{transform:translateX(100%);}}
+
+/* chapter dividers */
+.divider .no{font-family:var(--f-serif); font-style:italic; font-size:clamp(80px, 14vw, 240px); line-height:.8; color:var(--orange);}
+.divider h2{font-size:var(--t-div); font-weight:500; letter-spacing:-.045em; line-height:.88;}
+.divider h2 .serif{color:var(--orange-hi); display:block; padding-left:1.1em;}
+
+/* lists */
+.rows{display:flex; flex-direction:column;}
+.row{display:grid; grid-template-columns:56px 1fr auto; gap:16px; align-items:baseline; padding:16px 0; border-top:1px solid var(--line);}
+.row:last-child{border-bottom:1px solid var(--line);}
+.row .no{font-weight:600; color:var(--orange-hi); font-variant-numeric:tabular-nums;}
+.row .tx{font-size:clamp(18px, 1.5vw, 23px); min-width:0;}
+.row .who{font-size:var(--t-sm); color:var(--soft); text-align:right;}
+.rows.sm .row{grid-template-columns:40px 1fr; padding:12px 0;}
+.rows.sm .row .tx{font-size:var(--t-body);}
+
+/* team */
+.team{display:flex; flex-direction:column;}
+.mate{display:grid; grid-template-columns:160px 1fr; gap:18px; padding:18px 0; border-top:1px solid var(--line);}
+.mate:last-child{border-bottom:1px solid var(--line);}
+.mate h3{font-size:var(--t-h3); font-weight:500; letter-spacing:-.01em;}
+.mate .k{margin-top:4px;}
+.mate p{font-size:var(--t-body);}
+.mate p + p{color:var(--soft); font-size:var(--t-sm); margin-top:6px;}
+
+/* funnel */
+.fn{display:flex; flex-direction:column; gap:12px;}
+.fn-step{display:grid; grid-template-columns:auto 1fr; gap:6px 18px; padding:16px 18px; border-radius:14px; background:var(--panel-2); border:1px solid var(--line);}
+.fn-step .dot{grid-row:span 2; width:14px; height:14px; border-radius:50%; margin-top:6px;}
+.fn-step b{font-weight:500; font-size:clamp(18px, 1.5vw, 22px);}
+.fn-step p{grid-column:2; font-size:var(--t-sm); color:var(--soft);}
+.fn-step .k{grid-column:2;}
+
+/* tiers (estrutura) */
+.tier{display:grid; grid-template-columns:96px 1fr; gap:18px; padding:16px 0; border-top:1px solid var(--line); align-items:start;}
+.tier:last-child{border-bottom:1px solid var(--line);}
+.tier .stage{display:flex; flex-direction:column; gap:2px;}
+.tier .stage b{font-size:var(--t-lbl); letter-spacing:.16em; text-transform:uppercase; font-weight:600;}
+.tier .stage span{font-size:var(--t-sm); color:var(--soft);}
+.tier h3{font-size:var(--t-h3); font-weight:500; margin-bottom:8px;}
+.kv{display:grid; grid-template-columns:1fr 1fr; gap:10px 20px;}
+.kv div{display:flex; flex-direction:column; gap:3px; min-width:0;}
+.kv span{font-size:var(--t-sm); color:var(--soft);}
+.prods{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+.prods div{padding:12px 14px; border-radius:12px; background:var(--panel-2); border:1px solid var(--line); min-width:0;}
+.prods b{display:block; font-weight:500; font-size:18px; margin-bottom:4px;}
+.prods span{font-size:13.5px; color:var(--soft); line-height:1.4; display:block;}
+
+/* stacked bars (compradores) */
+.stk{display:flex; flex-direction:column; gap:18px;}
+.stk-row{display:grid; grid-template-columns:130px 1fr; gap:16px; align-items:center;}
+.stk-row b{font-weight:500; font-size:19px; display:block;}
+.stk-row span{font-size:13px; color:var(--soft);}
+.stk-bar{display:flex; height:46px; border-radius:10px; overflow:hidden; min-width:0;}
+.stk-bar i{display:flex; align-items:center; justify-content:center; font-style:normal; font-size:13.5px; font-weight:600; font-variant-numeric:tabular-nums; min-width:0; overflow:hidden;}
+.legend{display:flex; flex-wrap:wrap; gap:8px 18px;}
+.legend span{display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--soft);}
+.legend i{width:12px; height:12px; border-radius:3px; display:block;}
+.c1{background:#ED4E23; color:#171A17;} .c2{background:#56625A; color:#EEEBE4;} .c3{background:#9EB4AF; color:#171A17;}
+.c4{background:#F6B39A; color:#171A17;} .c5{background:#7E8C7B; color:#121512;} .c6{background:#B5A88F; color:#171A17;} .c7{background:#D8CCB6; color:#171A17;}
+
+/* cols */
+.cols3{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:clamp(14px, 1.6vw, 24px);}
+.cols2{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:clamp(18px, 2.4vw, 40px);}
+.col{display:flex; flex-direction:column; gap:12px; min-width:0;}
+.col h3{font-size:var(--t-h3); font-weight:500;}
+.col p{font-size:var(--t-body);}
+.col .muted{font-size:var(--t-sm);}
+.sub{padding:20px; border-radius:16px; background:var(--panel-2); border:1px solid var(--line); display:flex; flex-direction:column; gap:12px; min-width:0;}
+.sub.hot{background:linear-gradient(150deg, rgba(237,78,35,.22) 0%, rgba(237,78,35,.06) 100%); border-color:rgba(237,78,35,.45);}
+.sub p{font-size:var(--t-sm); line-height:1.5;}
+.sub p b{color:var(--orange-hi);}
+.ph{color:var(--orange-hi); font-variant-numeric:tabular-nums;}
+
+/* tested table */
+.tested{display:flex; flex-direction:column;}
+.t-row{display:grid; grid-template-columns:1fr auto; gap:6px 18px; padding:14px 0; border-top:1px solid var(--line);}
+.t-row:last-child{border-bottom:1px solid var(--line);}
+.t-row b{font-weight:500; font-size:18px;}
+.t-row .d{font-size:13.5px; color:var(--soft);}
+.t-row .v{text-align:right; grid-row:span 2; display:flex; flex-direction:column; align-items:flex-end; gap:2px;}
+.t-row .v strong{font-size:24px; font-weight:500; font-variant-numeric:tabular-nums;}
+.t-row .v span{font-size:13px; color:var(--soft); font-variant-numeric:tabular-nums;}
+.t-row.best strong{color:var(--orange-hi);}
+.t-head{display:flex; justify-content:space-between; font-size:var(--t-lbl); letter-spacing:.14em; text-transform:uppercase; color:var(--dim); padding-bottom:8px;}
+.badge{display:inline-block; font-size:11.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; background:var(--orange); color:var(--ink); border-radius:999px; padding:2px 9px; margin-left:8px; vertical-align:middle;}
+
+/* horizontal bars */
+.hb{display:flex; flex-direction:column; gap:9px;}
+.hb-row{display:grid; grid-template-columns:128px 1fr 76px; gap:12px; align-items:center;}
+.hb-row span{font-size:14.5px;}
+.hb-row .v{text-align:right; font-variant-numeric:tabular-nums; color:var(--soft); font-size:14px;}
+.hb-track{height:14px; border-radius:7px; background:rgba(255,255,255,.05); min-width:0;}
+.hb-track i{display:block; height:100%; border-radius:7px; background:linear-gradient(90deg,#56625A,#7E8C7B);}
+.hb-row.first i{background:linear-gradient(90deg,#D63F19,#F2602F);}
+.hb-row.home i{background:linear-gradient(90deg,#9EB4AF,#C9D6D2);}
+.hb-row.home span{color:var(--sage); font-weight:600;}
+
+/* bairros */
+.bx-grid{display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:18px 22px;}
+.bx{display:flex; flex-direction:column; gap:6px; padding-top:12px; border-top:1px solid var(--line-2); min-width:0;}
+.bx b{font-size:var(--t-lbl); font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--orange-hi);}
+.bx p{font-size:15px; line-height:1.4;}
+
+/* verba */
+.money{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.mcard{padding:18px; border-radius:16px; background:var(--panel-2); border:1px solid var(--line); display:flex; flex-direction:column; gap:8px; min-width:0;}
+.mcard.ghost{background:transparent; border:1px dashed var(--line-2);}
+.mcard .big{font-size:var(--t-num); font-weight:500; letter-spacing:-.03em; line-height:1; font-variant-numeric:tabular-nums;}
+.mcard .big.or{color:var(--orange-hi);}
+.mcard .s{font-size:var(--t-sm); color:var(--soft);}
+.split{display:flex; flex-direction:column; gap:4px; padding-top:8px; border-top:1px solid var(--line);}
+.split div{display:flex; justify-content:space-between; font-size:14px; font-variant-numeric:tabular-nums;}
+.split .m{color:var(--orange-hi);} .split .g{color:var(--sage);}
+.total{padding:16px 18px; border-radius:14px; background:var(--orange); color:var(--ink); font-size:var(--t-body); font-weight:500;}
+.key{display:flex; gap:16px; flex-wrap:wrap; font-size:13.5px; color:var(--soft);}
+.key span{display:flex; align-items:center; gap:7px;}
+.key i{width:12px; height:12px; border-radius:3px; display:block;}
+
+/* google tabs */
+.tabs{display:flex; gap:6px; padding:4px; border-radius:999px; background:rgba(255,255,255,.05); border:1px solid var(--line); align-self:flex-start; flex-wrap:wrap;}
+.tabs button{border:0; background:none; padding:8px 16px; border-radius:999px; font-size:14.5px; cursor:pointer; color:var(--soft); transition:background .2s, color .2s;}
+.tabs button[aria-selected="true"]{background:var(--orange); color:var(--ink); font-weight:600;}
+.gp{display:flex; flex-direction:column; gap:16px;}
+.gmeta{font-size:14px; color:var(--soft);}
+.kw{display:flex; flex-direction:column; gap:12px;}
+.kw-row{display:flex; flex-direction:column; gap:6px;}
+.kw-top{display:flex; justify-content:space-between; gap:12px; align-items:baseline;}
+.kw-top span{font-size:16px; min-width:0;}
+.kw-top b{font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;}
+.kw-top .brand-tag{font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); border:1px solid var(--line-2); border-radius:999px; padding:1px 8px; margin-left:8px;}
+.kw-bar{height:8px; border-radius:4px; background:rgba(255,255,255,.06);}
+.kw-bar i{display:block; height:100%; border-radius:4px; background:linear-gradient(90deg,#9EB4AF,#C9D6D2); min-width:3px;}
+.kw-row.none .kw-top b{color:var(--dim); font-weight:400;}
+.pills{display:flex; flex-wrap:wrap; gap:8px;}
+.pill{font-size:13.5px; padding:5px 12px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid var(--line); color:var(--mist);}
+.pill.neg{text-decoration:line-through; text-decoration-color:var(--orange); text-decoration-thickness:1.5px;}
+.g2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+
+/* channel detail */
+.ch4{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px;}
+.chc{display:flex; flex-direction:column; gap:10px; padding:18px; border-radius:16px; background:var(--panel-2); border:1px solid var(--line); min-width:0;}
+.chc.ghost{background:transparent; border:1px dashed var(--line-2);}
+.chc header{display:flex; flex-direction:column; gap:2px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+.chc header b{font-size:var(--t-h3); font-weight:500;}
+.chc header span{font-size:22px; color:var(--orange-hi); font-variant-numeric:tabular-nums;}
+.chl{display:flex; flex-direction:column; gap:3px; padding:6px 0;}
+.chl .n{font-size:14.5px;}
+.chl .st{font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; padding:1px 7px; border-radius:999px; margin-left:6px; vertical-align:2px;}
+.st.fundo{background:#3D463C; color:#C9D6D2;} .st.meio{background:var(--orange); color:var(--ink);} .st.topo{background:var(--peach); color:var(--ink);}
+.chl .m{font-size:20px; font-weight:500; font-variant-numeric:tabular-nums;}
+.chl .d{font-size:13px; color:var(--soft); font-variant-numeric:tabular-nums;}
+.totband{display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; padding:18px 22px; border-radius:16px; background:var(--orange); color:var(--ink);}
+.totband b{font-size:var(--t-num); font-weight:500; letter-spacing:-.03em; line-height:1; font-variant-numeric:tabular-nums;}
+.totband span{font-size:15px;}
+
+/* week / timeline */
+.week{display:flex; flex-direction:column;}
+.day{display:grid; grid-template-columns:92px 1fr; gap:16px; padding:16px 0; border-top:1px solid var(--line);}
+.day:last-child{border-bottom:1px solid var(--line);}
+.day .dn{font-family:var(--f-serif); font-style:italic; font-size:30px; line-height:1; color:var(--orange-hi);}
+.day b{font-weight:500; font-size:var(--t-h3); display:block;}
+.day p{font-size:var(--t-sm); color:var(--soft); margin-top:4px;}
+.tl{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:18px;}
+.step{display:flex; flex-direction:column; gap:10px; padding-top:18px; border-top:4px solid var(--line-2); min-width:0;}
+.step.on{border-top-color:var(--orange);}
+.step .d{font-size:var(--t-lbl); font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--orange-hi);}
+.step h3{font-size:var(--t-h3); font-weight:500;}
+.step p{font-size:var(--t-sm); color:var(--soft);}
+
+/* end */
+.end h2{font-size:clamp(48px, 7vw, 120px); font-weight:500; letter-spacing:-.04em; line-height:.92;}
+.end h2 .serif{color:var(--orange);}
+
+
+/* régua de qualificação */
+.stages{display:grid; grid-template-columns:1fr auto 1fr auto 1fr auto 1fr; gap:10px; align-items:stretch;}
+.stage-c{display:flex; flex-direction:column; gap:8px; padding:18px; border-radius:16px; background:var(--panel-2); border:1px solid var(--line); min-width:0;}
+.stage-c h3{font-size:var(--t-h3); font-weight:500;}
+.stage-c p:not(.k){font-size:var(--t-sm); color:var(--soft); line-height:1.45;}
+.stage-c .who{margin-top:auto;}
+.stage-c.peach{background:rgba(248,211,193,.08); border-color:rgba(248,211,193,.35);}
+.stage-c.hot{background:linear-gradient(150deg, rgba(237,78,35,.26) 0%, rgba(237,78,35,.08) 100%); border-color:rgba(237,78,35,.5);}
+.stage-c.deep{background:rgba(158,180,175,.08); border-color:rgba(158,180,175,.35);}
+.arrow{align-self:center; color:var(--orange-hi); font-size:22px;}
+.who{font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--sage);}
+.crit{display:flex; flex-direction:column;}
+.crit-r{display:flex; flex-direction:column; gap:6px; padding:14px 0; border-top:1px solid var(--line);}
+.crit-r:last-child{border-bottom:1px solid var(--line);}
+.crit-r.on{padding:16px; margin-top:8px; border:1px solid rgba(237,78,35,.5); border-radius:14px; background:linear-gradient(150deg, rgba(237,78,35,.2) 0%, rgba(237,78,35,.05) 100%);}
+.crit-h{display:flex; justify-content:space-between; align-items:center; gap:12px;}
+.crit-h b{font-weight:500; font-size:var(--t-h3);}
+.crit-r p{font-size:var(--t-sm); color:var(--soft);}
+.lib{font-size:11.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; padding:3px 10px; border-radius:999px; white-space:nowrap;}
+.lib.mql{background:var(--peach); color:var(--ink);} .lib.pri{background:rgba(255,255,255,.08); color:var(--mist); border:1px solid var(--line-2);} .lib.sql{background:var(--orange); color:var(--ink);}
+.sig{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.9fr); gap:clamp(18px, 2.4vw, 36px); align-items:start;}
+.sig-t{font-size:var(--t-h3); font-weight:500;}
+.sig-tbl{display:flex; flex-direction:column; min-width:0;}
+.sig-row{display:grid; grid-template-columns:150px 1fr 1fr; gap:16px; padding:12px 0; border-top:1px solid var(--line); font-size:var(--t-sm); align-items:start;}
+.sig-row b{font-weight:600; font-size:15.5px;}
+.sig-head{border-top:0; font-size:var(--t-lbl); font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--orange-hi); padding-top:0;}
+.sig-head span:last-child{color:var(--sage);}
+.no-c{color:var(--dim);}
+.met{display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px;}
+.met-c{display:flex; flex-direction:column; gap:6px; padding:16px; border-radius:14px; background:var(--panel-2); border:1px solid var(--line); min-width:0;}
+.met-c b{font-weight:500; font-size:17px;}
+.met-c .f{font-size:13px; color:var(--orange-hi);}
+.met-c p{font-size:13.5px; color:var(--soft); line-height:1.4;}
+.met-c.key{border-color:rgba(237,78,35,.5); background:linear-gradient(150deg, rgba(237,78,35,.2) 0%, rgba(237,78,35,.05) 100%);}
+@media (max-width:1100px){ .met{grid-template-columns:repeat(3, minmax(0,1fr));} .stages{grid-template-columns:1fr 1fr;} .stages .arrow{display:none;} }
+@media (max-width:899px){ .sig{grid-template-columns:1fr;} }
+@media (max-width:560px){ .met, .stages{grid-template-columns:1fr;} .sig-row{grid-template-columns:1fr; gap:4px;} .sig-head{display:none;} }
+
+/* ---------- motion ---------- */
+@keyframes rv{from{opacity:0; transform:translateY(22px);} to{opacity:1; transform:none;}}
+@keyframes gx{from{transform:scaleX(0);} to{transform:scaleX(1);}}
+@keyframes pin{from{opacity:0; transform:translateY(-10px) scale(.96);} to{opacity:1; transform:none;}}
+.sec.in .rv{animation:rv .85s var(--ease) both; animation-delay:calc(var(--i, 0) * 90ms + 100ms);}
+.sec.in .panel{animation:pin .9s var(--ease) both;}
+.sec.in .gx{animation:gx 1.2s var(--ease) both; transform-origin:left center; animation-delay:calc(var(--i, 0) * 70ms + 300ms);}
+@media (prefers-reduced-motion: reduce){
+  .sec.in .rv, .sec.in .panel, .sec.in .gx, .hint .ln::after{animation:none;}
+}
+
+/* ---------- responsive ---------- */
+@media (max-width:1100px){
+  .bx-grid{grid-template-columns:repeat(3, minmax(0,1fr));}
+  .ch4{grid-template-columns:repeat(2, minmax(0,1fr));}
+}
+@media (max-width:899px){
+  #rail{display:none;}
+  .sec{justify-content:center !important; align-items:flex-end; padding-block:96px 48px;}
+  .sec.bare-sec{align-items:center;}
+  .panel, .panel.wide{width:100%; background:rgba(17,20,17,.8);}
+  .cols3, .cols2, .tl, .g2{grid-template-columns:1fr;}
+  .bx-grid{grid-template-columns:repeat(2, minmax(0,1fr));}
+  .prods{grid-template-columns:1fr;}
+  .brand b{display:none;}
+  .tbtn .lbl{display:none;}
+}
+@media (max-width:560px){
+  .ch4, .money, .kv{grid-template-columns:1fr;}
+  .bx-grid{grid-template-columns:1fr;}
+  .stk-row{grid-template-columns:1fr; gap:8px;}
+  .mate, .tier{grid-template-columns:1fr; gap:8px;}
+  .hb-row{grid-template-columns:96px 1fr 64px;}
+  .row{grid-template-columns:40px 1fr;} .row .who{grid-column:2; text-align:left;}
+  .day{grid-template-columns:64px 1fr;}
+  #curLabel{display:none;} .sep{display:none;}
+  .hero h1 .serif{padding-left:.4em;}
+  .divider h2 .serif{padding-left:.4em;}
+}
+</style>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><img src="data:image/png;base64,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" alt="Trilha"><b>Markup · Estratégia Trilha</b></div>
+    <span class="sep" aria-hidden="true"></span>
+    <span id="curLabel" aria-live="polite">Abertura</span>
+    <span class="sp"></span>
+    <button class="tbtn" id="fsBtn" type="button"><span class="lbl">Apresentar</span><kbd>F</kbd></button>
+  </div>
+  <div class="prog" aria-hidden="true"><i id="progBar"></i></div>
+</header>
+
+<nav id="rail" aria-label="Capítulos"></nav>
+
+
+<main>
+
+<!-- 01 · capa -->
+<section class="sec bare-sec hero" id="capa" data-side="l" data-cam="0,0,7.5,0" data-ch="Abertura" data-label="Capa">
+  <div class="bare">
+    <p class="eyebrow rv"><img src="data:image/png;base64,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" alt="">Novembro de 2026</p>
+    <h1 class="rv" style="--i:1">Estratégia <span class="serif">Digital</span></h1>
+    <div class="meta rv" style="--i:3">
+      <div><span class="ml">Cliente</span><span class="mv">Markup Incorporações</span></div>
+      <div><span class="ml">Marketing e mídia</span><span class="mv">Trilha Performance Digital</span></div>
+      <div><span class="ml">Pré-vendas (SDR)</span><span class="mv">Pontozero</span></div>
+    </div>
+    <p class="hint rv" style="--i:5"><span class="ln"></span>Role para seguir a trilha · setas do teclado no modo apresentação</p>
+  </div>
+</section>
+
+<!-- 02 · sumário -->
+<section class="sec" id="sumario" data-side="r" data-cam="0,-0.55,9,1.5" data-ch="Abertura" data-label="Sumário">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Conteúdo</p><h2 class="title">Sobre o que vamos <em>falar hoje</em></h2></div>
+    <div class="rows">
+      <div class="row rv" style="--i:1"><span class="no">01</span><span class="tx">Produtos e estratégia</span><span class="who">Horizon, Up! e Salsa</span></div>
+      <div class="row rv" style="--i:2"><span class="no">02</span><span class="tx">Mídia paga</span><span class="who">Meta, Google, públicos, metas</span></div>
+      <div class="row rv" style="--i:3"><span class="no">03</span><span class="tx">Operação</span><span class="who">CRM, rotina, próximos passos</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 · time -->
+<section class="sec" id="time" data-side="l" data-cam="1,0,17,1" data-k="0.3" data-ch="Abertura" data-label="Quem faz o quê">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Quem faz o quê</p><h2 class="title">Marketing <em>&amp; Vendas</em></h2></div>
+    <div class="team">
+      <div class="mate rv" style="--i:1"><div><h3>Trilha</h3><p class="k">Marketing e mídia</p></div><div><p>Campanhas Meta e Google, criativos, landing pages e automações do CRM.</p><p>Beatriz (coordenação de marketing), João Pedro e Josiel (assessor).</p></div></div>
+      <div class="mate rv" style="--i:2"><div><h3>Pontozero</h3><p class="k">Pré-vendas</p></div><div><p>Recebe o lead de marketing e conduz até a reunião.</p><p>Gabriel Torres como SDR no dia a dia.</p></div></div>
+      <div class="mate rv" style="--i:3"><div><h3>Markup</h3><p class="k">Comercial e marca</p></div><div><p>Condição comercial, visitas/reunião e venda.</p><p>Ricardo Asti, Luccas Almeida e Matheus. Aprovações: Luccas Almeida.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 · divisor mídia -->
+<section class="sec bare-sec divider" id="midia-paga" data-side="l" data-cam="2,0,17,5" data-ch="Mídia paga" data-label="Capítulo 02">
+  <div class="bare">
+    <p class="eyebrow rv">Capítulo</p>
+    <p class="no rv" style="--i:1">02</p>
+    <h2 class="rv" style="--i:2">Mídia <span class="serif">paga</span></h2>
+  </div>
+</section>
+
+<!-- 05 · funil -->
+<section class="sec" id="funil" data-side="r" data-cam="2,-0.35,11,1.5" data-ch="Mídia paga" data-label="Funil">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Funil</p><h2 class="title">Funil de <em>Aquisição</em></h2></div>
+    <div class="fn">
+      <div class="fn-step rv" style="--i:1"><span class="dot" style="background:var(--peach)"></span><span class="k">Topo · conteúdo</span><b>Fazer Maceió e a Markup serem desejadas</b><p>Reels de obra, bairro e marca, influenciadores. Gera alcance e alimenta o remarketing.</p></div>
+      <div class="fn-step rv" style="--i:2"><span class="dot" style="background:var(--orange)"></span><span class="k">Meio · consideração</span><b>Dar o argumento racional</b><p>Remarketing de quem assistiu, visitou o site ou interagiu: preço do m², rentabilidade, condição.</p></div>
+      <div class="fn-step rv" style="--i:3"><span class="dot" style="background:#7E8C7B"></span><span class="k">Fundo · conversão</span><b>Gerar o contato e entregar ao SDR</b><p>Formulário com perguntas de qualificação e pesquisa no Google. O lead entra no Kommo com a origem marcada.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 · estrutura -->
+<section class="sec" id="estrutura" data-side="l" data-cam="2,0.55,10,-1.5" data-ch="Mídia paga" data-label="Estrutura Meta">
+  <div class="panel wide">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Meta</p><h2 class="title">Estrutura de <em>campanhas</em></h2></div>
+    <div>
+      <div class="tier rv" style="--i:1"><div class="stage"><b style="color:var(--peach)">Topo</b><span>Atrair</span></div><div><h3>Conteúdo</h3><div class="kv"><div><p class="k">Objetivo</p><span>Tráfego para o perfil @markup_inc</span></div><div><p class="k">Otimiza para</p><span>Novos seguidores</span></div></div></div></div>
+      <div class="tier rv" style="--i:2"><div class="stage"><b style="color:var(--orange-hi)">Meio</b><span>Aquecer</span></div><div><h3>Remarketing</h3><div class="kv"><div><p class="k">Objetivo</p><span>Engajamento</span></div><div><p class="k">Otimiza para</p><span>Compartilhamentos e salvamentos</span></div></div></div></div>
+      <div class="tier rv" style="--i:3"><div class="stage"><b style="color:var(--sage)">Fundo</b><span>Converter</span></div><div class="prods">
+        <div><b>Horizon</b><span>Cadastros, com formulário de 3 perguntas de qualificação</span></div>
+        <div><b>Up! Studios</b><span>Cadastros, com formulário de 3 perguntas de qualificação</span></div>
+        <div><b>Salsa</b><span>Cadastros, com formulário de 3 perguntas de qualificação</span></div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 · compradores -->
+<section class="sec" id="compradores" data-side="r" data-cam="3,-0.45,23,6" data-ch="Mídia paga" data-label="Quem já comprou">
+  <div class="panel wide">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Quem já comprou</p><h2 class="title">Perfil dos compradores de <em>cada empreendimento</em></h2></div>
+    <div class="stk">
+      <div class="stk-row rv" style="--i:1"><div><b>Horizon</b><span>51 compradores</span></div>
+        <div class="stk-bar gx" style="--i:1" role="img" aria-label="Horizon: empresários 16%, empresas 33%, jurídico 18%, saúde 16%, engenharia e gestão 10%, setor público 6%, outros 2%"><i class="c1" style="width:15.69%">16%</i><i class="c2" style="width:33.33%">33%</i><i class="c3" style="width:17.65%">18%</i><i class="c4" style="width:15.69%">16%</i><i class="c5" style="width:9.8%">10%</i><i class="c6" style="width:5.88%"></i><i class="c7" style="width:1.96%"></i></div></div>
+      <div class="stk-row rv" style="--i:2"><div><b>Salsa</b><span>76 compradores</span></div>
+        <div class="stk-bar gx" style="--i:2" role="img" aria-label="Salsa: empresários 34%, empresas 14%, jurídico 11%, saúde 14%, engenharia e gestão 16%, setor público 5%, outros 5%"><i class="c1" style="width:34.21%">34%</i><i class="c2" style="width:14.47%">14%</i><i class="c3" style="width:10.53%">11%</i><i class="c4" style="width:14.47%">14%</i><i class="c5" style="width:15.79%">16%</i><i class="c6" style="width:5.26%"></i><i class="c7" style="width:5.26%"></i></div></div>
+      <div class="stk-row rv" style="--i:3"><div><b>Up! Studios</b><span>48 compradores</span></div>
+        <div class="stk-bar gx" style="--i:3" role="img" aria-label="Up! Studios: empresários 44%, empresas 2%, jurídico 10%, saúde 4%, engenharia e gestão 13%, setor público 2%, outros 25%"><i class="c1" style="width:43.75%">44%</i><i class="c2" style="width:2.08%"></i><i class="c3" style="width:10.42%">10%</i><i class="c4" style="width:4.17%"></i><i class="c5" style="width:12.5%">13%</i><i class="c6" style="width:2.08%"></i><i class="c7" style="width:25%">25%</i></div></div>
+    </div>
+    <div class="legend rv" style="--i:4"><span><i class="c1"></i>Empresários</span><span><i class="c2"></i>Empresas (CNPJ)</span><span><i class="c3"></i>Jurídico</span><span><i class="c4"></i>Saúde</span><span><i class="c5"></i>Engenharia e gestão</span><span><i class="c6"></i>Setor público</span><span><i class="c7"></i>Outros</span></div>
+    <p class="src rv" style="--i:5">Mapa de Inteligência Markup, aba Clientes, consultado em 18/11/2026</p>
+  </div>
+</section>
+
+<!-- 08 · públicos -->
+<section class="sec" id="publicos" data-side="w" data-cam="3,0.2,20,9" data-ch="Mídia paga" data-label="Públicos">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Públicos</p><h2 class="title">Quem queremos alcançar <em>em cada produto</em></h2></div>
+    <div class="cols3">
+      <div class="col rv" style="--i:1"><span class="ptag">Horizon</span>
+        <div class="sub"><p>Profissional liberal de Maceió que quer sair do aluguel e ter consultório ou escritório próprio.</p></div>
+        <div class="sub"><p>Empresário/investidor do interior de Alagoas que enxerga Maceió como alternativa pra diversificar seu patrimônio.</p></div>
+        <div class="sub"><p>Investidor que aposta na valorização do Centro e da Praia da Avenida.</p></div>
+      </div>
+      <div class="col rv" style="--i:2"><span class="ptag">Up! Studios</span>
+        <div class="sub"><p>Investidor de fora de Alagoas que quer renda com temporada e uma base em Maceió para usar nas férias.</p></div>
+        <div class="sub"><p>Investidor de Maceió que quer diversificar patrimônio.</p></div>
+      </div>
+      <div class="col rv" style="--i:3"><span class="ptag">Salsa</span>
+        <div class="sub"><p>Moradores de alto padrão de Maceió: mapeamos 12 condomínios e prédios de luxo. <b>74%</b> dos compradores são daqui.</p></div>
+        <div class="sub"><p>Comprador de fora de Maceió (<b>4 das 5</b> vendas por lead). Vamos anunciar no Nordeste, SP, Rio, Brasília, BH e Goiânia.</p></div>
+      </div>
+    </div>
+    <p class="note rv" style="--i:4">Confirmado no painel da Markup (18/11): perfil e profissão dos compradores. A cidade não consta no painel: a origem segue como hipótese.</p>
+  </div>
+</section>
+
+<!-- 09 · formulário -->
+<section class="sec" id="formulario" data-side="w" data-cam="3,0.7,15,2" data-ch="Mídia paga" data-label="Formulário">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Formulário</p><h2 class="title">Perguntas de qualificação <em>por produto</em></h2></div>
+    <div class="cols3">
+      <div class="sub rv" style="--i:1"><p class="k">Horizon</p>
+        <p><b>1.</b> O Horizon tem salas de frente para o mar no Centro, de R$&#160;10 a 14 mil o m², em 60 parcelas. Esse é o perfil de imóvel que você procura?</p>
+        <p><b>2.</b> A entrada é de <span class="ph">[R$&#160;__]</span>. Esse valor faz sentido pra você?</p>
+        <p><b>3.</b> Em que momento da sua busca você está?</p></div>
+      <div class="sub rv" style="--i:2"><p class="k">Up! Studios</p>
+        <p><b>1.</b> O Up! Studios tem studios a 200&#160;m da praia da Jatiúca, com locação por temporada gerida pela MME. Esse é o perfil de imóvel que você procura?</p>
+        <p><b>2.</b> A entrada é de R$&#160;53&#160;mil, com parcelas a partir de R$&#160;2.600. Esse valor faz sentido pra você?</p>
+        <p><b>3.</b> Em que momento da sua busca você está?</p></div>
+      <div class="sub rv" style="--i:3"><p class="k">Salsa Home Resort</p>
+        <p><b>1.</b> O Salsa tem as últimas unidades pé na areia em Guaxuma, a partir de <span class="ph">[R$&#160;__]</span>. Esse é o perfil de imóvel que você procura?</p>
+        <p><b>2.</b> A entrada é de <span class="ph">[R$&#160;__]</span>. Esse valor faz sentido pra você?</p>
+        <p><b>3.</b> Em que momento da sua busca você está?</p></div>
+    </div>
+    <p class="src rv" style="--i:4">Respostas: 1 e 2, sim ou não · 3, pronto para conversar, comparando opções ou começando a pesquisar. Tudo entra no Kommo e define a prioridade do SDR.</p>
+  </div>
+</section>
+
+<!-- 10 · segmentação horizon -->
+<section class="sec" id="seg-horizon" data-side="l" data-cam="4,0.1,8,6.5" data-focus="hub" data-map="horizon" data-kadd="0.52" data-ch="Mídia paga" data-label="Segmentação Horizon">
+  <div class="panel wide">
+    <div class="head rv"><div class="tagrow"><span class="ptag">Horizon</span><p class="eyebrow">Segmentação no Meta</p></div><h2 class="title">Onde vamos encontrar <em>o comprador</em></h2></div>
+    <div class="g2">
+      <div class="tested rv" style="--i:1">
+        <div class="t-head"><span>O que a conta já testou</span><span>custo por lead</span></div>
+        <div class="t-row best"><div><b>Maceió, Marechal e Barra de São Miguel</b><span class="badge">Menor custo</span></div><div class="v"><strong data-to="87.37" data-dec="2" data-pre="R$ ">R$ 87,37</strong><span>34 leads</span></div><span class="d">35 a 59 anos, público aberto · R$ 2.970,65 investidos</span></div>
+        <div class="t-row"><b>Maceió e Arapiraca</b><div class="v"><strong>R$ 109,11</strong><span>3 leads</span></div><span class="d">Interesse em investimento · R$ 327,34 investidos</span></div>
+        <div class="t-row"><b>Centros empresariais</b><div class="v"><strong>R$ 135,86</strong><span>4 leads</span></div><span class="d">30 a 45 anos, raio de 1 milha · R$ 543,44 investidos</span></div>
+        <p class="note" style="margin-top:14px">Só o primeiro passa de 30 leads. Os outros dois, com 3 e 4, são sinal de caminho, não conclusão.</p>
+      </div>
+      <div class="rv" style="--i:2">
+        <div class="t-head"><span>Como vamos segmentar</span></div>
+        <div class="rows sm">
+          <div class="row"><span class="no">01</span><span class="tx">Polos de saúde: Memorial Arthur Ramos e Unimed (Gruta), Hospital Unimed (Farol), Hospital Vida (Ponta Verde)</span></div>
+          <div class="row"><span class="no">02</span><span class="tx">Polos jurídicos: Centro (TJAL e TRT), Barro Duro (Fórum da Capital e MPF), Serraria (Justiça Federal) e Poço (MPAL)</span></div>
+          <div class="row"><span class="no">03</span><span class="tx">Centros empresariais: Record Office, The Square Park Office, Norcon Empresarial e Empresarial Humberto Lobo</span></div>
+          <div class="row"><span class="no">04</span><span class="tx">Interior de Alagoas: Arapiraca, Penedo, Palmeira dos Índios e vizinhas</span></div>
+          <div class="row"><span class="no">05</span><span class="tx">Semelhante a compradores e remarketing</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="src rv" style="--i:3">Meta Ads, campanha Horizon desde 12/08/2026, dados de 17/11/2026</p>
+  </div>
+</section>
+
+<!-- 11 · renda up -->
+<section class="sec" id="renda-up" data-side="r" data-cam="4,-0.06,12,34" data-map="renda" data-kadd="0.26" data-ch="Mídia paga" data-label="Renda por capital">
+  <div class="panel">
+    <div class="head rv"><div class="tagrow"><span class="ptag">Up! Studios</span><p class="eyebrow">Segmentação · renda por capital</p></div><h2 class="title">Onde está a renda <em>nas praças do Up!</em></h2></div>
+    <p class="muted rv" style="--i:1; font-size:var(--t-sm)">Renda média mensal de quem declara Imposto de Renda, por capital</p>
+    <div class="hb rv" style="--i:2">
+      <div class="hb-row first"><span>São Paulo</span><div class="hb-track"><i class="gx" style="width:100%; --i:0"></i></div><span class="v">R$ 13.092</span></div>
+      <div class="hb-row"><span>Brasília</span><div class="hb-track"><i class="gx" style="width:96.45%; --i:1"></i></div><span class="v">R$ 12.627</span></div>
+      <div class="hb-row"><span>Porto Alegre</span><div class="hb-track"><i class="gx" style="width:94.70%; --i:2"></i></div><span class="v">R$ 12.398</span></div>
+      <div class="hb-row"><span>Rio de Janeiro</span><div class="hb-track"><i class="gx" style="width:94.20%; --i:3"></i></div><span class="v">R$ 12.332</span></div>
+      <div class="hb-row"><span>Recife</span><div class="hb-track"><i class="gx" style="width:89.72%; --i:4"></i></div><span class="v">R$ 11.746</span></div>
+      <div class="hb-row"><span>Belo Horizonte</span><div class="hb-track"><i class="gx" style="width:86.63%; --i:5"></i></div><span class="v">R$ 11.341</span></div>
+      <div class="hb-row"><span>Curitiba</span><div class="hb-track"><i class="gx" style="width:86.09%; --i:6"></i></div><span class="v">R$ 11.271</span></div>
+      <div class="hb-row"><span>Goiânia</span><div class="hb-track"><i class="gx" style="width:76.06%; --i:7"></i></div><span class="v">R$ 9.958</span></div>
+      <div class="hb-row"><span>Salvador</span><div class="hb-track"><i class="gx" style="width:73.47%; --i:8"></i></div><span class="v">R$ 9.618</span></div>
+      <div class="hb-row home"><span>Maceió</span><div class="hb-track"><i class="gx" style="width:70.46%; --i:9"></i></div><span class="v">R$ 9.225</span></div>
+    </div>
+    <div class="sub rv" style="--i:3"><p class="k">Na própria Maceió</p><p>Jardim Petrópolis (R$ 11.684,64) e Ponta Verde (R$ 11.035,76) lideram a renda do responsável pelo domicílio. A Jatiúca vem em 3º, com R$ 7.934,04.</p></div>
+    <p class="src rv" style="--i:4">Fontes: FGV Social, Mapa da Riqueza (IRPF 2020); IBGE, Censo 2022</p>
+  </div>
+</section>
+
+<!-- 12 · bairros up -->
+<section class="sec" id="bairros-up" data-side="w" data-cam="4,0,11,28" data-map="bairros" data-ch="Mídia paga" data-label="Bairros-alvo">
+  <div class="panel">
+    <div class="head rv"><div class="tagrow"><span class="ptag">Up! Studios</span><p class="eyebrow">Segmentação · bairros-alvo</p></div><h2 class="title">Bairros-alvo <em>em cada capital</em></h2></div>
+    <div class="bx-grid">
+      <div class="bx rv" style="--i:1"><b>São Paulo</b><p>Moema, Itaim Bibi, Jardim Paulista, Alto de Pinheiros, Pinheiros</p></div>
+      <div class="bx rv" style="--i:1"><b>Rio de Janeiro</b><p>Lagoa, Leblon, São Conrado, Ipanema, Barra da Tijuca</p></div>
+      <div class="bx rv" style="--i:2"><b>Porto Alegre</b><p>Jardim Europa, Três Figueiras, Bela Vista, Moinhos de Vento</p></div>
+      <div class="bx rv" style="--i:2"><b>Belo Horizonte</b><p>Belvedere, Mangabeiras, Comiteco, São Bento, Santo Agostinho</p></div>
+      <div class="bx rv" style="--i:3"><b>Curitiba</b><p>Batel, Mossunguê, Hugo Lange, Juvevê, Ahú</p></div>
+      <div class="bx rv" style="--i:3"><b>Recife</b><p>Jaqueira, Casa Forte, Parnamirim, Poço, Graças</p></div>
+      <div class="bx rv" style="--i:4"><b>Salvador</b><p>Horto Florestal, Patamares, Vitória, Itaigara, Caminho das Árvores</p></div>
+      <div class="bx rv" style="--i:4"><b>Fortaleza</b><p>Guararapes, Cocó, De Lourdes, Meireles, Aldeota</p></div>
+      <div class="bx rv" style="--i:5"><b>Aracaju e João Pessoa</b><p>Jardins, Treze de Julho · Brisamar, Altiplano, Tambaú, Cabo Branco</p></div>
+      <div class="bx rv" style="--i:5"><b>Brasília</b><p>Lago Sul, Park Way, Sudoeste, Lago Norte, Jardim Botânico</p></div>
+    </div>
+    <p class="src rv" style="--i:6">IBGE, Censo 2022 (bairros com 300+ domicílios; São Paulo por distrito) · Brasília: FGV, IRPF 2020</p>
+  </div>
+</section>
+
+<!-- 13 · segmentação up -->
+<section class="sec" id="seg-up" data-side="r" data-cam="4,0.06,11,27" data-map="up" data-kadd="0.28" data-ch="Mídia paga" data-label="Segmentação Up!">
+  <div class="panel">
+    <div class="head rv"><div class="tagrow"><span class="ptag">Up! Studios</span><p class="eyebrow">Segmentação no Meta</p></div><h2 class="title">Onde vamos encontrar <em>o comprador</em></h2></div>
+    <div class="col" style="gap:24px">
+      <div class="tested rv" style="--i:1">
+        <div class="t-head"><span>O que a conta já testou</span><span>custo por lead</span></div>
+        <div class="t-row best"><div><b>Maceió e Arapiraca</b><span class="badge">Menor custo</span></div><div class="v"><strong data-to="24.85" data-dec="2" data-pre="R$ ">R$ 24,85</strong><span>61 leads</span></div><span class="d">Interesse em investimento · R$ 1.515,88 investidos</span></div>
+        <div class="t-row"><b>Brasil inteiro</b><div class="v"><strong>R$ 38,14</strong><span>32 leads</span></div><span class="d">Investimento imobiliário · R$ 1.220,43 investidos</span></div>
+        <div class="t-row"><b>Fora de Alagoas</b><div class="v"><strong>R$ 38,26</strong><span>46 leads</span></div><span class="d">SP, DF, MG, RJ, PR, MS, Goiânia e Cuiabá · R$ 1.760,15 investidos</span></div>
+        <div class="t-row"><b>Portugal</b><div class="v"><strong>R$ 139,95</strong><span>2 leads</span></div><span class="d">2 conjuntos · R$ 279,89 investidos</span></div>
+        <p class="note" style="margin-top:14px">Portugal, com 2 leads, ainda não dá leitura.</p>
+      </div>
+      <div class="rv" style="--i:2">
+        <div class="t-head"><span>Como vamos segmentar</span></div>
+        <div class="rows sm">
+          <div class="row"><span class="no">01</span><span class="tx">Maceió investidor: Ponta Verde, Jatiúca, Jardim Petrópolis, Pajuçara, Farol e Gruta de Lourdes</span></div>
+          <div class="row"><span class="no">02</span><span class="tx">Capitais com voo direto: São Paulo, Rio, Brasília, Belo Horizonte e Goiânia, nos bairros de maior renda</span></div>
+          <div class="row"><span class="no">03</span><span class="tx">Capitais do Nordeste: Recife, Salvador, Fortaleza, João Pessoa e Aracaju</span></div>
+          <div class="row"><span class="no">04</span><span class="tx">Remarketing e semelhante a leads qualificados do Kommo</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="src rv" style="--i:3">Meta Ads, campanha Up! desde 19/05/2026, dados de 17/11/2026</p>
+  </div>
+</section>
+
+<!-- 14 · segmentação salsa -->
+<section class="sec" id="seg-salsa" data-side="r" data-cam="4,-0.06,12,28" data-map="salsa" data-kadd="0.28" data-ch="Mídia paga" data-label="Segmentação Salsa">
+  <div class="panel">
+    <div class="head rv"><div class="tagrow"><span class="ptag">Salsa Home Resort</span><p class="eyebrow">Segmentação no Meta</p></div><h2 class="title">Alto padrão de Maceió e <em>quem vem de fora</em></h2></div>
+    <div class="col">
+      <div class="sub rv" style="--i:1"><p class="k">Público 1 · Maceió</p>
+        <p><b>Condomínios:</b> Morada da Garça e Atlantis (Garça Torta), Angra de Ipioca e Park Sauaçuhy (Ipioca), Aldebaran (Jardim Petrópolis), Jardim do Horto (Gruta).</p>
+        <p><b>Prédios na orla:</b> Da Vinci, Mansão Galba Accioly, Giardini e Raul Santana (Ponta Verde), Maison Plage (Guaxuma), KAA (Jacarecica).</p></div>
+      <div class="sub rv" style="--i:2"><p class="k">Público 2 · Fora de Maceió</p>
+        <p><b>Nordeste:</b> Recife, Salvador, Fortaleza, João Pessoa e Aracaju.</p>
+        <p><b>Voo direto:</b> São Paulo, Rio, Brasília, Belo Horizonte e Goiânia.</p>
+        <p>Sempre nos bairros de maior renda de cada capital.</p></div>
+      <div class="sub hot rv" style="--i:3"><p class="k">Público 3 · Semelhante</p>
+        <p>Público semelhante aos compradores do Salsa: empresários (34%), engenharia e gestão (16%), saúde (14%) e empresas (14%).</p></div>
+    </div>
+    <p class="src rv" style="--i:4">Pinos conferidos no mapa antes de subir · voos: FlightConnections, nov/2026</p>
+  </div>
+</section>
+
+<!-- 15 · verba -->
+<section class="sec" id="verba" data-side="l" data-cam="5,0.35,19,5" data-ch="Mídia paga" data-label="Verba">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Verba</p><h2 class="title">Verba mensal <em>por produto</em></h2></div>
+    <div class="money">
+      <div class="mcard rv" style="--i:1"><p class="k">Horizon</p><p class="big or" data-to="5" data-pre="R$ " data-suf=" mil">R$ 5 mil</p><p class="s">Salas sem vista mar</p><div class="split"><div><span class="m">Meta</span><span>R$ 3.500</span></div><div><span class="g">Google</span><span>R$ 1.500</span></div></div></div>
+      <div class="mcard rv" style="--i:2"><p class="k">Up! Studios</p><p class="big" data-to="3" data-pre="R$ " data-suf=" mil">R$ 3 mil</p><p class="s">Studios primeiro</p><div class="split"><div><span class="m">Meta</span><span>R$ 2.400</span></div><div><span class="g">Google</span><span>R$ 600</span></div></div></div>
+      <div class="mcard rv" style="--i:3"><p class="k">Conteúdo</p><p class="big" data-to="1" data-pre="R$ " data-suf=" mil">R$ 1 mil</p><p class="s">Reels e influenciadores</p><div class="split"><div><span class="m">Meta</span><span>R$ 1.000</span></div></div></div>
+      <div class="mcard ghost rv" style="--i:4"><p class="k">Salsa</p><p class="big" style="color:var(--soft)">A confirmar</p><p class="s">4 unidades restantes</p><div class="split"><div><span class="muted">Meta e Google, a confirmar</span></div></div></div>
+    </div>
+    <p class="total rv" style="--i:5">Total: R$ 9 mil, sendo R$ 6.900 no Meta e R$ 2.100 no Google, mais a verba do Salsa [a confirmar].</p>
+    <div class="key rv" style="--i:6"><span><i style="background:var(--orange)"></i>Meta</span><span><i style="background:var(--sage)"></i>Google</span><span>Na cena 3D, cada unidade de altura = R$ 1.000 por mês</span></div>
+  </div>
+</section>
+
+<!-- 16 · google -->
+<section class="sec" id="google" data-side="r" data-cam="5,-0.45,16,3" data-ch="Mídia paga" data-label="Google">
+  <div class="panel wide">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Google · pesquisa</p><h2 class="title">Palavras que <em>vamos comprar</em></h2></div>
+    <div class="tabs rv" style="--i:1" role="tablist" aria-label="Produto">
+      <button type="button" role="tab" id="tab-h" aria-selected="true" aria-controls="gp-h">Horizon</button>
+      <button type="button" role="tab" id="tab-u" aria-selected="false" aria-controls="gp-u" tabindex="-1">Up! Studios</button>
+      <button type="button" role="tab" id="tab-s" aria-selected="false" aria-controls="gp-s" tabindex="-1">Salsa</button>
+    </div>
+
+    <div class="gp rv" style="--i:2" id="gp-h" role="tabpanel" aria-labelledby="tab-h">
+      <p class="gmeta">Horizon · R$ 1.500 por mês · buscas por mês</p>
+      <div class="kw">
+        <div class="kw-row"><div class="kw-top"><span>sala comercial maceio</span><b>90</b></div><div class="kw-bar"><i class="gx" style="width:42.86%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>sala comercial em maceio</span><b>90</b></div><div class="kw-bar"><i class="gx" style="width:42.86%; --i:1"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>salas comerciais em maceio</span><b>90</b></div><div class="kw-bar"><i class="gx" style="width:42.86%; --i:2"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>salas comerciais a venda em maceio</span><b>10</b></div><div class="kw-bar"><i class="gx" style="width:4.76%; --i:3"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>sala comercial jatiuca</span><b>10</b></div><div class="kw-bar"><i class="gx" style="width:4.76%; --i:4"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>markup incorporações<span class="brand-tag">Marca</span></span><b>210</b></div><div class="kw-bar"><i style="width:100%"></i></div></div>
+        <div class="kw-row none"><div class="kw-top"><span>Horizon Markup<span class="brand-tag">Marca</span></span><b>sem volume</b></div></div>
+      </div>
+      <div>
+        <div class="sub"><p class="k">Negativas</p><div class="pills"><span class="pill neg">aluguel</span><span class="pill neg">alugar</span><span class="pill neg">advogado</span><span class="pill neg">advocacia</span><span class="pill neg">emprego</span><span class="pill neg">usado</span></div></div>
+      </div>
+    </div>
+
+    <div class="gp" id="gp-u" role="tabpanel" aria-labelledby="tab-u" hidden>
+      <p class="gmeta">Up! Studios · R$ 600 por mês · buscas por mês</p>
+      <div class="kw">
+        <div class="kw-row"><div class="kw-top"><span>apartamento a venda em maceio</span><b>2.400</b></div><div class="kw-bar"><i style="width:100%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamento em jatiuca</span><b>140</b></div><div class="kw-bar"><i style="width:5.83%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamentos jatiuca</span><b>140</b></div><div class="kw-bar"><i style="width:5.83%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>studio maceio</span><b>110</b></div><div class="kw-bar"><i style="width:4.58%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>studio em maceio</span><b>90</b></div><div class="kw-bar"><i style="width:3.75%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamento na jatiúca</span><b>90</b></div><div class="kw-bar"><i style="width:3.75%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>markup incorporações<span class="brand-tag">Marca</span></span><b>210</b></div><div class="kw-bar"><i style="width:8.75%"></i></div></div>
+        <div class="kw-row none"><div class="kw-top"><span>Up Studios Markup<span class="brand-tag">Marca</span></span><b>sem volume</b></div></div>
+      </div>
+      <div>
+        <div class="sub"><p class="k">Negativas</p><div class="pills"><span class="pill neg">aluguel</span><span class="pill neg">alugar</span><span class="pill neg">diária</span><span class="pill neg">hospedagem</span><span class="pill neg">temporada</span><span class="pill neg">usado</span></div></div>
+      </div>
+    </div>
+
+    <div class="gp" id="gp-s" role="tabpanel" aria-labelledby="tab-s" hidden>
+      <p class="gmeta">Salsa Home Resort · verba a confirmar · buscas por mês</p>
+      <div class="kw">
+        <div class="kw-row"><div class="kw-top"><span>apartamento a venda em maceio</span><b>2.400</b></div><div class="kw-bar"><i style="width:100%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamento em maceió</span><b>1.900</b></div><div class="kw-bar"><i style="width:79.17%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamento ponta verde maceio</span><b>720</b></div><div class="kw-bar"><i style="width:30%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamento pajuçara</span><b>390</b></div><div class="kw-bar"><i style="width:16.25%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>Salsa Home Resort<span class="brand-tag">Marca</span></span><b>320</b></div><div class="kw-bar"><i style="width:13.33%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>markup incorporações<span class="brand-tag">Marca</span></span><b>210</b></div><div class="kw-bar"><i style="width:8.75%"></i></div></div>
+        <div class="kw-row"><div class="kw-top"><span>apartamento guaxuma</span><b>10</b></div><div class="kw-bar"><i style="width:0.42%"></i></div></div>
+      </div>
+      <div>
+        <div class="sub"><p class="k">Negativas</p><div class="pills"><span class="pill neg">aluguel</span><span class="pill neg">alugar</span><span class="pill neg">diária</span><span class="pill neg">temporada</span><span class="pill neg">usado</span><span class="pill neg">minha casa minha vida</span></div></div>
+      </div>
+    </div>
+
+    <p class="src rv" style="--i:3">Planejador de Palavras-chave, média mensal no Brasil, nov/2025 a out/2026, consultado em 18/11/2026. Barras na escala de cada produto; variações próximas aparecem com o mesmo volume e não se somam.</p>
+  </div>
+</section>
+
+<!-- 18 · criativos -->
+<section class="sec" id="criativos" data-side="w" data-cam="5,0.6,22,7" data-ch="Mídia paga" data-label="Criativos">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Criativos</p><h2 class="title">O que cada anúncio <em>irá dizer</em></h2></div>
+    <div class="cols3">
+      <div class="col rv" style="--i:1"><span class="ptag">Horizon</span>
+        <div class="rows sm">
+          <div class="row"><span class="no">01</span><span class="tx">Metro quadrado abaixo dos concorrentes da região</span></div>
+          <div class="row"><span class="no">02</span><span class="tx">Quitado na entrega em 60 parcelas, sem banco</span></div>
+          <div class="row"><span class="no">03</span><span class="tx">Certificações e energia solar nas áreas comuns</span></div>
+          <div class="row"><span class="no">04</span><span class="tx">Rooftop com restaurante e auditório para receber cliente</span></div>
+          <div class="row"><span class="no">05</span><span class="tx">Uma base em Maceió para quem é do interior</span></div>
+        </div></div>
+      <div class="col rv" style="--i:2"><span class="ptag">Up! Studios</span>
+        <div class="rows sm">
+          <div class="row"><span class="no">01</span><span class="tx">Condição de pagamento e vista mar, o formato que mais vendeu</span></div>
+          <div class="row"><span class="no">02</span><span class="tx">Renda com a MME: ocupação e valor líquido por mês</span></div>
+          <div class="row"><span class="no">03</span><span class="tx">O prédio mais perto da praia, na Jatiúca</span></div>
+          <div class="row"><span class="no">04</span><span class="tx">Design pop art: um studio que se destaca no anúncio de temporada</span></div>
+          <div class="row"><span class="no">05</span><span class="tx">Influenciadores em três ondas: desejo, experiência e decisão</span></div>
+        </div></div>
+      <div class="col rv" style="--i:3"><span class="ptag">Salsa Home Resort</span>
+        <div class="rows sm">
+          <div class="row"><span class="no">01</span><span class="tx">Pé na areia em Guaxuma, no litoral norte de Maceió</span></div>
+          <div class="row"><span class="no">02</span><span class="tx">Últimas 4 unidades: 85 das 89 já foram vendidas</span></div>
+          <div class="row"><span class="no">03</span><span class="tx">3 das 4 restantes são frontais, de frente para o mar</span></div>
+          <div class="row"><span class="no">04</span><span class="tx">Vizinhos que já escolheram: empresários, engenheiros e médicos</span></div>
+          <div class="row"><span class="no">05</span><span class="tx">Para quem é de fora: a casa de praia em Maceió</span></div>
+        </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 · detalhamento por canal -->
+<section class="sec" id="por-canal" data-side="w" data-cam="5,0,18,7" data-ch="Mídia paga" data-label="Por canal">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Mídia paga · Por canal</p><h2 class="title">Detalhamento <em>por canal</em></h2></div>
+    <div class="ch4">
+      <div class="chc rv" style="--i:1"><header><b>Horizon</b><span>R$ 5.000</span></header>
+        <div class="chl"><span class="n">Meta · formulário<span class="st fundo">Fundo</span></span><span class="m">R$ 3.000</span><span class="d">R$ 100,00 por dia</span></div>
+        <div class="chl"><span class="n">Google · pesquisa<span class="st fundo">Fundo</span></span><span class="m">R$ 1.500</span><span class="d">R$ 50,00 por dia</span></div>
+        <div class="chl"><span class="n">Meta · remarketing<span class="st meio">Meio</span></span><span class="m">R$ 500</span><span class="d">R$ 16,67 por dia</span></div></div>
+      <div class="chc rv" style="--i:2"><header><b>Up! Studios</b><span>R$ 3.000</span></header>
+        <div class="chl"><span class="n">Meta · formulário<span class="st fundo">Fundo</span></span><span class="m">R$ 2.000</span><span class="d">R$ 66,67 por dia</span></div>
+        <div class="chl"><span class="n">Google · pesquisa<span class="st fundo">Fundo</span></span><span class="m">R$ 600</span><span class="d">R$ 20,00 por dia</span></div>
+        <div class="chl"><span class="n">Meta · remarketing<span class="st meio">Meio</span></span><span class="m">R$ 400</span><span class="d">R$ 13,33 por dia</span></div></div>
+      <div class="chc rv" style="--i:3"><header><b>Conteúdo</b><span>R$ 1.000</span></header>
+        <div class="chl"><span class="n">Meta · Reels<span class="st topo">Topo</span></span><span class="m">R$ 1.000</span><span class="d">R$ 33,33 por dia</span></div></div>
+      <div class="chc ghost rv" style="--i:4"><header><b>Salsa</b><span style="color:var(--soft)">a confirmar</span></header>
+        <div class="chl"><span class="n">Meta · formulário<span class="st fundo">Fundo</span></span></div>
+        <div class="chl"><span class="n">Google · pesquisa<span class="st fundo">Fundo</span></span></div>
+        <div class="chl"><span class="n">Meta · remarketing<span class="st meio">Meio</span></span></div>
+        <p class="src">Verba entra à parte, quando a Markup confirmar.</p></div>
+    </div>
+    <div class="totband rv" style="--i:5"><span>Total sem o Salsa</span><b data-to="9000" data-pre="R$ " data-suf=" por mês">R$ 9.000 por mês</b><span>R$ 300,00 por dia</span></div>
+    <p class="src rv" style="--i:6">Por dia: mês de 30 dias. Divisão entre canais revista com 14 dias de dados.</p>
+  </div>
+</section>
+
+
+
+
+
+<!-- 19 · régua de qualificação -->
+<section class="sec" id="regua" data-side="w" data-cam="8,0,13,5" data-gate="all" data-ch="Operação" data-label="Régua MQL e SQL">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Operação · Qualificação</p><h2 class="title">Régua de qualificação: <em>MQL e SQL</em></h2></div>
+    <p class="lead rv" style="--i:1">O marketing entrega o lead com perfil e entrada confirmados. A Pontozero comprova a intenção de compra.</p>
+    <div class="stages">
+      <div class="stage-c rv" style="--i:2"><p class="k">Etapa 1</p><h3>Lead</h3><p>Preencheu o formulário e ainda não passou pelo filtro.</p><span class="who">Quem: Marketing</span></div>
+      <span class="arrow rv" style="--i:2" aria-hidden="true">→</span>
+      <div class="stage-c peach rv" style="--i:3"><p class="k">Etapa 2</p><h3>MQL</h3><p>Disse sim às perguntas de perfil e de entrada e respondeu à abordagem no WhatsApp.</p><span class="who">Quem: Marketing</span></div>
+      <span class="arrow rv" style="--i:3" aria-hidden="true">→</span>
+      <div class="stage-c hot rv" style="--i:4"><p class="k">Etapa 3</p><h3>SQL</h3><p>Aceitou reunião ou visita com data e deu pelo menos um sinal de intenção.</p><span class="who">Quem: SDR Pontozero</span></div>
+      <span class="arrow rv" style="--i:4" aria-hidden="true">→</span>
+      <div class="stage-c deep rv" style="--i:5"><p class="k">Etapa 4</p><h3>Oportunidade</h3><p>A reunião aconteceu e o corretor confirma que o lead segue para proposta.</p><span class="who">Quem: Corretor Markup</span></div>
+    </div>
+    <p class="note rv" style="--i:6">Quem diz não à pergunta de perfil ou de entrada continua lead e vai para a nutrição. A oportunidade mede se o SQL está bem calibrado.</p>
+  </div>
+</section>
+
+<!-- 20 · quem qualifica o quê -->
+<section class="sec" id="regua-papeis" data-side="r" data-cam="8,-0.45,16,3" data-gate="mql sql" data-kadd="0.2" data-ch="Operação" data-label="Quem qualifica">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Operação · Qualificação</p><h2 class="title">O marketing qualifica perfil, <em>o SDR qualifica intenção</em></h2></div>
+    <div class="crit">
+      <div class="crit-r rv" style="--i:1"><div class="crit-h"><b>Necessidade</b><span class="lib mql">MQL</span></div><p>Pergunta 1: o produto com valor e diferencial. “Esse é o perfil de imóvel que você procura?”</p><span class="who">Quem: Marketing</span></div>
+      <div class="crit-r rv" style="--i:2"><div class="crit-h"><b>Orçamento</b><span class="lib mql">MQL</span></div><p>Pergunta 2: “A entrada é de R$&#160;X. Esse valor faz sentido pra você?”</p><span class="who">Quem: Marketing</span></div>
+      <div class="crit-r rv" style="--i:3"><div class="crit-h"><b>Momento</b><span class="lib pri">Prioridade</span></div><p>Pergunta 3: “Em que momento da sua busca você está?”</p><span class="who">Quem: Marketing</span></div>
+      <div class="crit-r on rv" style="--i:4"><div class="crit-h"><b>Intenção de compra</b><span class="lib sql">SQL</span></div><p>Conversa do SDR: próximo passo com data e pelo menos um dos quatro sinais de intenção.</p><span class="who">Quem: SDR Pontozero</span></div>
+    </div>
+    <p class="note rv" style="--i:5">O SDR não repete as perguntas do formulário: o trabalho dele é comprovar que o lead quer comprar.</p>
+  </div>
+</section>
+
+<!-- 21 · sinais de intenção -->
+<section class="sec" id="regua-sinais" data-side="w" data-cam="8,0.5,14,7" data-gate="sql" data-ch="Operação" data-label="Sinais de intenção">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Operação · Qualificação</p><h2 class="title">Intenção de compra, <em>em fatos que o SDR registra</em></h2></div>
+    <div class="sig">
+      <div class="col rv" style="--i:1">
+        <p class="k">É SQL com os dois</p>
+        <div class="sub hot"><h3 class="sig-t">Próximo passo com data</h3><p>Aceitou reunião on-line ou visita, com data e hora.</p><span class="who">Campo: Data da reunião</span></div>
+        <div class="sub"><h3 class="sig-t">Pelo menos um sinal</h3><p>Disse ou pediu algo que só quem pensa em comprar diz ou pede.</p><span class="who">Campo: Sinais de intenção</span></div>
+      </div>
+      <div class="sig-tbl rv" style="--i:2" role="table" aria-label="Sinais de intenção">
+        <div class="sig-row sig-head" role="row"><span role="columnheader">Sinal</span><span role="columnheader">Conta quando</span><span role="columnheader">Não conta</span></div>
+        <div class="sig-row" role="row"><b role="cell">Prazo</b><span role="cell">Diz que pretende decidir dentro do prazo <span class="ph">[a confirmar]</span></span><span class="no-c" role="cell">“Sem pressa”, “ano que vem”, “só estou olhando”</span></div>
+        <div class="sig-row" role="row"><b role="cell">Escolha de unidade</b><span role="cell">Pergunta por andar ou vista no Horizon, um studio no Up!, frontal ou lateral no Salsa</span><span class="no-c" role="cell">Pede “o material” sem dizer qual</span></div>
+        <div class="sig-row" role="row"><b role="cell">Condição de compra</b><span role="cell">Pergunta parcelamento ou forma de pagamento</span><span class="no-c" role="cell">Pergunta só o valor, que já viu no formulário</span></div>
+        <div class="sig-row" role="row"><b role="cell">Decisor junto</b><span role="cell">Confirma cônjuge, sócio ou família na reunião ou visita</span><span class="no-c" role="cell">“Vou mostrar para minha esposa”, sem data</span></div>
+      </div>
+    </div>
+    <p class="note rv" style="--i:3">No Kommo, o card só entra em Reunião agendada com a data e um sinal marcados. A data dessa etapa é a data do SQL.</p>
+  </div>
+</section>
+
+<!-- 22 · métricas -->
+<section class="sec" id="regua-metricas" data-side="w" data-cam="8,-0.2,16,9" data-gate="all" data-ch="Operação" data-label="Métricas">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Operação · Qualificação</p><h2 class="title">O que passamos a medir, <em>por produto</em></h2></div>
+    <div class="met">
+      <div class="met-c rv" style="--i:1"><b>Taxa de resposta</b><span class="f">MQL ÷ leads</span><p>Qualidade da abordagem e da nutrição</p></div>
+      <div class="met-c rv" style="--i:1"><b>MQL por origem</b><span class="f">Por campanha e criativo</span><p>Onde colocar a verba do Meta e do Google</p></div>
+      <div class="met-c rv" style="--i:2"><b>Primeiro contato</b><span class="f">MQL atendidos em até 15 min</span><p>Velocidade do SDR depois da resposta</p></div>
+      <div class="met-c key rv" style="--i:2"><b>MQL para SQL</b><span class="f">SQL ÷ MQL</span><p>Principal indicador de qualidade do lead</p></div>
+      <div class="met-c rv" style="--i:3"><b>Tempo até o SQL</b><span class="f">Mediana em dias</span><p>Tamanho do ciclo até a reunião</p></div>
+      <div class="met-c rv" style="--i:3"><b>Comparecimento</b><span class="f">Reuniões feitas ÷ SQL</span><p>Se o lead aparece no que agendou</p></div>
+      <div class="met-c rv" style="--i:4"><b>SQL para oportunidade</b><span class="f">Oportunidades ÷ SQL</span><p>Se a régua do SQL está calibrada</p></div>
+      <div class="met-c rv" style="--i:4"><b>Conversão por sinal</b><span class="f">Oportunidades ÷ SQL, por sinal</span><p>Quais sinais preveem compra</p></div>
+      <div class="met-c rv" style="--i:5"><b>Custo por SQL</b><span class="f">Investimento ÷ SQL</span><p>Custo real de uma reunião qualificada</p></div>
+      <div class="met-c rv" style="--i:5"><b>Motivos de perda</b><span class="f">Contagem por motivo</span><p>Onde o MQL trava antes do SQL</p></div>
+    </div>
+    <p class="note rv" style="--i:6">Tudo pela safra do mês em que o lead entrou, com janela igual ao ciclo de compra <span class="ph">[a confirmar]</span>: um SQL de dezembro vindo de um lead de novembro conta em novembro.</p>
+  </div>
+</section>
+
+<!-- 20 · rotina -->
+<section class="sec" id="rotina" data-side="r" data-cam="6,0.1,21,5" data-ch="Operação" data-label="Rotina">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Rotina de acompanhamento</p><h2 class="title">Quatro entregas <em>por semana</em></h2></div>
+    <div class="week">
+      <div class="day rv" style="--i:1"><span class="dn">Segunda</span><div><b>Relatório semanal</b><p>Investimento, leads, custo e qualificação, por produto.</p></div></div>
+      <div class="day rv" style="--i:2"><span class="dn">Quarta</span><div><b>Otimizações</b><p>O que mudamos nas campanhas, por quê e o que esperamos.</p></div></div>
+      <div class="day rv" style="--i:3"><span class="dn">Quinta</span><div><b>Melhores criativos</b><p>Os anúncios que mais trouxeram lead qualificado e o próximo teste.</p></div></div>
+      <div class="day rv" style="--i:4"><span class="dn">Sexta</span><div><b>Resumo da semana</b><p>O que avançou, o que travou e o plano da semana seguinte.</p></div></div>
+    </div>
+    <p class="note rv" style="--i:5">Tudo no grupo de WhatsApp com Markup, Trilha e Pontozero.</p>
+  </div>
+</section>
+
+<!-- 21 · cronograma -->
+<section class="sec" id="cronograma" data-side="w" data-cam="6,0,17,9" data-ch="Operação" data-label="Cronograma">
+  <div class="panel">
+    <div class="head rv"><p class="eyebrow">Cronograma</p><h2 class="title">Do kick-off às <em>campanhas no ar</em></h2></div>
+    <div class="tl">
+      <div class="step on rv" style="--i:1"><p class="d">05/11 · feito</p><h3>Kick-off</h3><p>Produtos, verba e papéis de Markup, Trilha e Pontozero definidos.</p></div>
+      <div class="step on rv" style="--i:2"><p class="d">Até 23/11</p><h3>Estratégia aprovada</h3><p>Públicos validados com o comercial. Acessos e materiais recebidos.</p></div>
+      <div class="step rv" style="--i:3"><p class="d">Até 24/11</p><h3>Campanhas no ar</h3><p>Imersão do SDR nos três produtos, Kommo com origem marcada, Horizon e Up! ativos.</p></div>
+      <div class="step rv" style="--i:4"><p class="d">Primeiros 30 dias</p><h3>Otimização</h3><p>Otimização diária, relatório semanal e revisão da divisão de verba no 14º dia.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 22 · fim -->
+<section class="sec bare-sec end" id="fim" data-side="l" data-cam="7,0,8,0" data-ch="Operação" data-label="Fim">
+  <div class="bare">
+    <p class="eyebrow rv">Markup · Trilha · Pontozero</p>
+    <h2 class="rv" style="--i:1">Próxima parada: <span class="serif">campanhas no ar.</span></h2>
+    <p class="lead rv" style="--i:2">Estratégia aprovada até 23/11 e Horizon e Up! ativos até 24/11.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+(function(){
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var secs = Array.prototype.slice.call(document.querySelectorAll('.sec'));
+  var metrics = [];
+  function measure(){
+    metrics = secs.map(function(s){ var r = s.getBoundingClientRect(); var top = r.top + scrollY; return {top:top, h:r.height, c:top + r.height/2}; });
+  }
+  measure();
+  var T = window.TRILHA = { secs:secs, reduce:reduce, active:0,
+    progress:function(){
+      var c = scrollY + innerHeight/2, m = metrics;
+      if (!m.length || c <= m[0].c) return {i:0, t:0};
+      for (var i=0;i<m.length-1;i++){ if (c < m[i+1].c) return {i:i, t:(c - m[i].c)/(m[i+1].c - m[i].c)}; }
+      return {i:m.length-1, t:0};
+    }
+  };
+
+  /* rail */
+  var rail = document.getElementById('rail'), railBtns = [], lastCh = '';
+  secs.forEach(function(s, idx){
+    if (s.dataset.ch !== lastCh){ lastCh = s.dataset.ch; var h = document.createElement('p'); h.className='ch'; h.textContent = lastCh; rail.appendChild(h); }
+    var b = document.createElement('button'); b.type='button'; b.setAttribute('aria-label', s.dataset.label);
+    b.innerHTML = '<span></span><i></i>'; b.firstChild.textContent = s.dataset.label;
+    b.addEventListener('click', function(){ go(idx); }); rail.appendChild(b); railBtns.push(b);
+  });
+
+  function go(idx){
+    idx = Math.max(0, Math.min(secs.length-1, idx));
+    var m = metrics[idx];
+    var y = m.h > innerHeight ? m.top : m.c - innerHeight/2;
+    window.scrollTo({top: Math.max(0, y), behavior: reduce ? 'auto' : 'smooth'});
+  }
+
+  var curLabel = document.getElementById('curLabel'), progBar = document.getElementById('progBar');
+  function onScroll(){
+    var p = T.progress(); var a = Math.min(secs.length-1, p.i + (p.t > .5 ? 1 : 0));
+    if (a !== T.active || !curLabel.dataset.ok){
+      T.active = a; curLabel.dataset.ok = '1';
+      curLabel.textContent = secs[a].dataset.ch + ' · ' + secs[a].dataset.label;
+      railBtns.forEach(function(b,i){ b.classList.toggle('on', i===a); if(i===a) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current'); });
+    }
+    var max = document.documentElement.scrollHeight - innerHeight;
+    progBar.style.width = (max > 0 ? (scrollY / max * 100) : 0) + '%';
+  }
+  addEventListener('scroll', onScroll, {passive:true});
+  addEventListener('resize', function(){ measure(); onScroll(); });
+  if (window.ResizeObserver) new ResizeObserver(function(){ measure(); }).observe(document.querySelector('main'));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ measure(); onScroll(); });
+  onScroll(); T.refresh = function(){ measure(); onScroll(); };
+
+  /* notes + fullscreen */
+  function toggleFs(){
+    try{
+      if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen().catch(function(){}); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch(function(){}); }
+    }catch(e){}
+  }
+  document.getElementById('fsBtn').addEventListener('click', toggleFs);
+
+  /* keyboard: presentation */
+  addEventListener('keydown', function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    if (t && t.closest && t.closest('[role="tablist"]') && (e.key==='ArrowLeft' || e.key==='ArrowRight')) return;
+    var k = e.key;
+    if (k==='ArrowDown' || k==='ArrowRight' || k==='PageDown' || (k===' ' && !(t && t.tagName==='BUTTON'))){ e.preventDefault(); go(T.active+1); }
+    else if (k==='ArrowUp' || k==='ArrowLeft' || k==='PageUp'){ e.preventDefault(); go(T.active-1); }
+    else if (k==='Home'){ e.preventDefault(); go(0); }
+    else if (k==='End'){ e.preventDefault(); go(secs.length-1); }
+    else if (k==='f' || k==='F'){ toggleFs(); }
+  });
+
+  /* tabs */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function selectTab(tab){
+    tabs.forEach(function(tb){ var on = tb===tab; tb.setAttribute('aria-selected', String(on)); tb.tabIndex = on ? 0 : -1;
+      var p = document.getElementById(tb.getAttribute('aria-controls')); p.hidden = !on; if (on && !reduce){ p.classList.remove('rv'); p.style.animation='none'; void p.offsetWidth; p.style.animation='rv .6s var(--ease) both'; } });
+  }
+  tabs.forEach(function(tb, i){
+    tb.addEventListener('click', function(){ selectTab(tb); });
+    tb.addEventListener('keydown', function(e){
+      if (e.key==='ArrowRight' || e.key==='ArrowLeft'){ e.preventDefault(); var n = tabs[(i + (e.key==='ArrowRight'?1:-1) + tabs.length) % tabs.length]; n.focus(); selectTab(n); }
+    });
+  });
+
+  /* deep link */
+  if (location.hash){ var target = document.getElementById(location.hash.slice(1)); if (target){ var idx = secs.indexOf(target); if (idx > -1) setTimeout(function(){ measure(); go(idx); }, 60); } }
+
+  /* reveal + count-up (content is complete at rest; animation plays on first view) */
+  function countUp(root){
+    root.querySelectorAll('[data-to]').forEach(function(el){
+      var to = +el.dataset.to, dec = +(el.dataset.dec || 0), pre = el.dataset.pre || '', suf = el.dataset.suf || '';
+      var fmt = new Intl.NumberFormat('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+      var final = el.textContent, t0 = performance.now() + 250, dur = 1300;
+      function step(now){ var p = Math.min(1, Math.max(0, (now - t0)/dur)); var e = 1 - Math.pow(1-p, 3);
+        el.textContent = pre + fmt.format(to * e) + suf; if (p < 1) requestAnimationFrame(step); else el.textContent = final; }
+      requestAnimationFrame(step);
+    });
+  }
+  if (!reduce && 'IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add('in'); countUp(e.target); io.unobserve(e.target); } }); }, {threshold:0});
+    secs.forEach(function(s){ io.observe(s); });
+  }
+})();
+</script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const T = window.TRILHA;
+const reduce = T.reduce;
+const TAU = Math.PI * 2;
+const V3 = THREE.Vector3;
+const C = { orange:0xED4E23, orangeHi:0xF7A47F, peach:0xF8D3C1, sage:0x9EB4AF, mist:0xE8E8E4, forest:0x3D463C, dark:0x1A1E1A };
+
+const canvas = document.getElementById('gl');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+} catch (e) { document.documentElement.classList.add('no-gl'); throw e; }
+
+const small = () => innerWidth < 900;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x121512);
+scene.fog = new THREE.FogExp2(0x121512, 0.021);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 400);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+scene.add(new THREE.HemisphereLight(0xC9D6D2, 0x2E1D14, 0.55));
+const key = new THREE.DirectionalLight(0xffe9dc, 1.5); key.position.set(6, 10, 8); scene.add(key);
+const rim = new THREE.DirectionalLight(0xED4E23, 0.9); rim.position.set(-8, 2, -10); scene.add(rim);
+
+/* ---------- helpers ---------- */
+function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const R = rng(20261118);
+
+const GLOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const r = g.createRadialGradient(64,64,0,64,64,64); r.addColorStop(0,'rgba(255,255,255,1)'); r.addColorStop(.22,'rgba(255,255,255,.5)'); r.addColorStop(.55,'rgba(255,255,255,.12)'); r.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0,0,128,128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+
+function glow(color, size, opacity = 1){
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:GLOW, color, transparent:true, opacity, blending:THREE.AdditiveBlending, depthWrite:false }));
+  s.scale.set(size, size, 1); return s;
+}
+function pointsMat(size, color, opacity = 1, vertexColors = false){
+  return new THREE.PointsMaterial({ size, color: vertexColors ? 0xffffff : color, map:GLOW, transparent:true, opacity, depthWrite:false, blending:THREE.AdditiveBlending, sizeAttenuation:true, vertexColors });
+}
+function label(text, { size = .5, color = '#E8E8E4', weight = 500, serif = false, fixed = false } = {}){
+  const fs = 96, pad = 20; const c = document.createElement('canvas'); const g = c.getContext('2d');
+  const font = serif ? `italic 400 ${fs}px "Instrument Serif", Georgia, serif` : `${weight} ${fs}px "Instrument Sans", Arial, sans-serif`;
+  g.font = font; const w = Math.ceil(g.measureText(text).width) + pad * 2; c.width = w; c.height = Math.round(fs * 1.35);
+  g.font = font; g.fillStyle = color; g.textBaseline = 'middle'; g.fillText(text, pad, c.height / 2 + 4);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false, sizeAttenuation:!fixed }));
+  s.scale.set(size * w / c.height, size, 1); s.userData.text = text; return s;
+}
+function flowDots(curve, n, radius, color){
+  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 10, 10), new THREE.MeshBasicMaterial({ color, toneMapped:false }), n);
+  const d = new THREE.Object3D(); const off = Array.from({length:n}, (_, i) => i / n + R() * .3 / n);
+  return { mesh, update(time, speed){ for (let i = 0; i < n; i++){ const u = ((off[i] + time * speed) % 1 + 1) % 1; curve.getPointAt(u, d.position); const s = Math.sin(u * Math.PI); d.scale.setScalar(.4 + .6 * s); d.updateMatrix(); mesh.setMatrixAt(i, d.matrix); } mesh.instanceMatrix.needsUpdate = true; } };
+}
+const physical = (color, o = {}) => new THREE.MeshPhysicalMaterial(Object.assign({ color, roughness:.32, metalness:.05, clearcoat:1, clearcoatRoughness:.2, envMapIntensity:.8 }, o));
+
+/* The Trilha mark: 8 offset arms around an octagon core (pinwheel) */
+const markMat = physical(C.orange, { emissive:0x6a1604, emissiveIntensity:.35 });
+const armGeo = new RoundedBoxGeometry(.27, .64, .26, 3, .035);
+const coreGeo = new THREE.CylinderGeometry(.5, .5, .255, 8);
+function trilhaMark(scale = 1){
+  const g = new THREE.Group();
+  for (let k = 0; k < 8; k++){ const p = new THREE.Group(); const m = new THREE.Mesh(armGeo, markMat); m.position.set(.272, .68, 0); p.add(m); p.rotation.z = -k * Math.PI / 4; g.add(p); }
+  const core = new THREE.Mesh(coreGeo, markMat); core.rotation.x = Math.PI / 2; g.add(core);
+  g.scale.setScalar(scale); return g;
+}
+
+await Promise.race([ Promise.all([ document.fonts.load('500 96px "Instrument Sans"'), document.fonts.load('italic 400 96px "Instrument Serif"') ]).catch(() => {}), new Promise(r => setTimeout(r, 1800)) ]);
+
+/* ---------- stage anchors ---------- */
+const P = [[0,0,0],[16,-1,-22],[-4,-1,-46],[14,-1,-70],[-6,-3,-96],[12,-2,-122],[-4,0,-162],[6,0,-186],[18,-1,-140]].map(a => new V3(...a));
+const pieces = [];
+
+/* 0 · hero mark */
+{
+  const g = new THREE.Group(); g.position.copy(P[0]); scene.add(g);
+  const mark = trilhaMark(1.9); g.add(mark);
+  const gl = glow(C.orange, 14, .5); gl.position.z = -1.5; g.add(gl);
+  const hp = []; for (let i = 0; i < 700; i++){ const a = R() * TAU, r = 2.7 + Math.pow(R(), 2) * 2.2; hp.push(Math.cos(a) * r, (R() - .5) * .35, Math.sin(a) * r); }
+  const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(hp, 3));
+  const halo = new THREE.Points(hg, pointsMat(.07, C.orangeHi, .75)); halo.rotation.x = 1.2; g.add(halo);
+  const pl = new THREE.PointLight(C.orange, 30, 14, 2); pl.position.set(0, 0, 3.5); g.add(pl);
+  pieces.push({ g, update(dt, t, ptr){ mark.rotation.z -= dt * .22; mark.rotation.x += ((ptr.y * .35) - mark.rotation.x) * .05; mark.rotation.y += ((ptr.x * .5) - mark.rotation.y) * .05; halo.rotation.z += dt * .05; gl.material.opacity = .45 + Math.sin(t * 1.3) * .06; } });
+}
+
+/* 1 · team: Trilha → Pontozero → Markup */
+{
+  const g = new THREE.Group(); g.position.copy(P[1]); scene.add(g);
+  const nT = trilhaMark(.75); nT.position.set(-3.4, -.4, 0);
+  const nP = new THREE.Mesh(new THREE.IcosahedronGeometry(.78, 5), physical(C.sage, { roughness:.22 })); nP.position.set(0, 1.3, -1);
+  const nM = new THREE.Mesh(new RoundedBoxGeometry(1.2, 1.6, 1.2, 4, .14), physical(C.mist, { roughness:.4 })); nM.position.set(3.4, -.3, 0);
+  g.add(nT, nP, nM);
+  [[nT, C.orange], [nP, C.sage], [nM, C.mist]].forEach(([n, c]) => { const s = glow(c, 4, .22); s.position.copy(n.position); s.position.z -= .8; g.add(s); });
+  const curve = new THREE.CatmullRomCurve3([new V3(-3.4,-.4,0), new V3(-1.7,1.1,-.4), new V3(0,1.3,-1), new V3(1.8,1,-.4), new V3(3.4,-.3,0)]);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 120, .022, 6), new THREE.MeshBasicMaterial({ color:C.sage, transparent:true, opacity:.45 })));
+  const dots = flowDots(curve, 16, .06, C.orangeHi); g.add(dots.mesh);
+  [['Trilha', nT, 'Marketing e mídia'], ['Pontozero', nP, 'Pré-vendas'], ['Markup', nM, 'Comercial e marca']].forEach(([a, n, b]) => {
+    const l = label(a, { size:.55 }); l.position.copy(n.position).add(new V3(0, 1.45, 0)); g.add(l);
+    const s = label(b, { size:.3, color:'#9EB4AF' }); s.position.copy(n.position).add(new V3(0, 1.0, 0)); g.add(s);
+  });
+  pieces.push({ g, update(dt, t){ nT.rotation.z -= dt * .4; nP.rotation.y += dt * .35; nM.rotation.y += dt * .25; dots.update(t, .07); } });
+}
+
+/* 2 · funnel: three rings, leads swirl down and thin out */
+{
+  const g = new THREE.Group(); g.position.copy(P[2]); scene.add(g);
+  const rings = [[3.3, 2.4, C.peach, 'Topo'], [2.3, 0, C.orange, 'Meio'], [1.3, -2.4, 0x7E8C7B, 'Fundo']];
+  rings.forEach(([r, y, c, name]) => {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r, .09, 24, 160), physical(c, { emissive:c, emissiveIntensity:.18 })); m.rotation.x = Math.PI / 2; m.position.y = y; g.add(m);
+    const l = label(name, { size:.48, color:'#EEEBE4' }); l.position.set(r + 1.1, y, 0); g.add(l);
+  });
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 1.3, 4.8, 48, 6, true), new THREE.MeshBasicMaterial({ color:C.sage, wireframe:true, transparent:true, opacity:.06 })); g.add(cone);
+  const N = small() ? 260 : 460; const pos = new Float32Array(N * 3); const st = [];
+  const radiusAt = y => y >= 2.4 ? 3.3 + (y - 2.4) * .35 : y >= -2.4 ? 1.3 + (y + 2.4) / 4.8 * 2 : Math.max(.12, 1.3 - (-2.4 - y) * .75);
+  const spawn = (o, fresh) => { o.u = fresh ? R() : 0; o.a = R() * TAU; o.s = .55 + R() * .45; o.v = .07 + R() * .05; const q = R(); o.end = q < .45 ? .47 : q < .75 ? .79 : 1; };
+  for (let i = 0; i < N; i++){ const o = {}; spawn(o, true); st.push(o); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, pointsMat(.17, C.orangeHi, 1)); g.add(pts);
+  pieces.push({ g, update(dt){ for (let i = 0; i < N; i++){ const o = st[i]; o.u += dt * o.v; o.a += dt * (.5 + (1 - o.u) * .4); if (o.u > o.end) spawn(o, false);
+      const y = 3.8 - o.u * 7.8; const r = radiusAt(y) * o.s; pos[i*3] = Math.cos(o.a) * r; pos[i*3+1] = y; pos[i*3+2] = Math.sin(o.a) * r; }
+      geo.attributes.position.needsUpdate = true; cone.rotation.y += dt * .05; } });
+}
+
+/* 3 · the three products as towers */
+{
+  const g = new THREE.Group(); g.position.copy(P[3]); scene.add(g);
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(7.6, 7.6, .2, 96), new THREE.MeshStandardMaterial({ color:0x181C18, roughness:.85, metalness:.2 })); plate.position.y = -3.1; plate.userData.noFrame = true; g.add(plate);
+  const edge = new THREE.Mesh(new THREE.TorusGeometry(7.6, .02, 8, 160), new THREE.MeshBasicMaterial({ color:C.orange, toneMapped:false })); edge.rotation.x = Math.PI / 2; edge.position.y = -3; edge.userData.noFrame = true; g.add(edge);
+  function windows(cols, rows, seed, lit){
+    const rr = rng(seed); const c = document.createElement('canvas'); c.width = cols * 16; c.height = rows * 16; const x = c.getContext('2d');
+    x.fillStyle = '#1B201B'; x.fillRect(0, 0, c.width, c.height);
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++){ const v = rr(); x.fillStyle = v < lit * .25 ? '#F7A47F' : v < lit ? '#D9D3C4' : '#2B312A'; x.fillRect(i * 16 + 3, j * 16 + 4, 10, 9); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; return t;
+  }
+  const roof = new THREE.MeshStandardMaterial({ color:0x232823, roughness:.7 });
+  function tower(name, sub, w, h, d, x, z, cols, rows, seed, lit){
+    const tex = windows(cols, rows, seed, lit);
+    const side = new THREE.MeshStandardMaterial({ map:tex, emissiveMap:tex, emissive:0xffffff, emissiveIntensity:.75, roughness:.5, metalness:.15 });
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, side, roof, roof, side, side]); m.position.set(x, -3 + h / 2, z); g.add(m);
+    const b = glow(C.orangeHi, 1.6, .7); b.position.set(x, -3 + h + .25, z); g.add(b);
+    const l = label(name, { size:.75 }); l.center.set(.5, 0); l.position.set(x, -3 + h + 1.05, z); g.add(l);
+    const s = label(sub, { size:.42, color:'#9EB4AF' }); s.center.set(.5, 0); s.position.set(x, -3 + h + .55, z); g.add(s);
+    return m;
+  }
+  tower('Horizon', 'Salas comerciais · Centro', 2.4, 6.4, 2.4, -4, .6, 8, 22, 11, .5);
+  tower('Up! Studios', 'Studios · Jatiúca', 1.5, 8.4, 1.5, 0, -1.2, 5, 30, 23, .62);
+  tower('Salsa', 'Pé na areia · Guaxuma', 4, 3, 2.6, 4.3, .9, 14, 9, 37, .55);
+  pieces.push({ g, update(dt, t){ g.rotation.y = Math.sin(t * .12) * .28; } });
+}
+
+/* 4 · pins: Maceió and the capitals by real latitude/longitude; each map section shows only what its text talks about */
+let mapPiece; const HUB = new V3();
+{
+  const g = new THREE.Group(); g.position.copy(P[4]); scene.add(g);
+  const M = [-9.67, -35.74], k = .8;
+  const proj = (la, lo) => { const dx = lo - M[1], dz = -(la - M[0]); const r = Math.hypot(dx, dz) || 1; const rr = 2.2 * Math.pow(r, .65); return new V3(dx / r * rr, 0, dz / r * rr); };
+  const fmt = n => 'R$ ' + n.toLocaleString('pt-BR');
+  // [nome, lat, lon, lado do rótulo, modos em que aparece, renda IRPF (só no modo renda), arco]
+  const cities = [
+    ['Recife', -8.05, -34.88, 'l', 'up salsa bairros renda', 11746, 'ne'],
+    ['João Pessoa', -7.12, -34.86, 'l', 'up salsa bairros', 0, 'ne'],
+    ['Aracaju', -10.91, -37.07, 'l', 'up salsa bairros', 0, 'ne'],
+    ['Salvador', -12.97, -38.50, 'l', 'up salsa bairros renda', 9618, 'ne'],
+    ['Fortaleza', -3.73, -38.52, 'l', 'up salsa bairros', 0, 'ne'],
+    ['São Paulo', -23.55, -46.63, 'l', 'up salsa bairros renda', 13092, 'voo'],
+    ['Rio de Janeiro', -22.91, -43.17, 'b', 'up salsa bairros renda', 12332, 'voo'],
+    ['Brasília', -15.79, -47.88, 'c', 'up salsa bairros renda', 12627, 'voo'],
+    ['Belo Horizonte', -19.92, -43.94, 'l', 'up salsa bairros renda', 11341, 'voo'],
+    ['Goiânia', -16.68, -49.25, 'l', 'up salsa renda', 9958, 'voo'],
+    ['Curitiba', -25.43, -49.27, 'l', 'bairros renda', 11271, null],
+    ['Porto Alegre', -30.03, -51.23, 'l', 'bairros renda', 12398, null],
+    ['Palmeira dos Índios', -9.41, -36.63, 'l', 'horizon', 0, null],
+    ['Arapiraca', -9.75, -36.66, 'l', 'horizon', 0, null],
+    ['Penedo', -10.29, -36.58, 'l', 'horizon', 0, null]
+  ];
+  const all = cities.map(c => proj(c[1], c[2])); all.push(new V3());
+  const box = new THREE.Box3().setFromPoints(all); const ctr = box.getCenter(new V3()); ctr.y = 0;
+  const inner = new THREE.Group(); inner.position.copy(ctr).multiplyScalar(-1); g.add(inner);
+  HUB.copy(P[4]).sub(ctr);
+  const grid = new THREE.GridHelper(44, 44, C.sage, C.forest); grid.material.transparent = true; grid.material.opacity = .16; grid.material.depthWrite = false; g.add(grid);
+
+  const headGeo = new THREE.SphereGeometry(.12, 16, 16), stickGeo = new THREE.CylinderGeometry(.02, .02, 1, 6); stickGeo.translate(0, .5, 0);
+  const ringGeo = new THREE.RingGeometry(.16, .21, 40); ringGeo.rotateX(-Math.PI / 2);
+  const pins = [];
+  function sideLabel(text, side, size, color){
+    const l = label(text, { size, color });
+    if (side === 'r') l.center.set(0, .5); else if (side === 'l') l.center.set(1, .5); else if (side === 'b') l.center.set(.5, 1.7); else l.center.set(.5, -.5);
+    l.userData.base = l.scale.clone(); return l;
+  }
+  function pin(p, color, sz, modes, opt = {}){
+    const pg = new THREE.Group(); pg.position.copy(p); inner.add(pg);
+    const stick = new THREE.Mesh(stickGeo, new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.75 })); pg.add(stick);
+    const head = new THREE.Mesh(headGeo, new THREE.MeshBasicMaterial({ color, toneMapped:false })); head.scale.setScalar(sz); pg.add(head);
+    const gl = glow(color, .9 * sz, .5); pg.add(gl);
+    let ring = null; if (opt.ring){ ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.4, side:THREE.DoubleSide, depthWrite:false })); ring.position.y = .01; pg.add(ring); }
+    const side = opt.side || 'c', dx = side === 'r' ? .25 : side === 'l' ? -.25 : 0;
+    const la = opt.name ? sideLabel(opt.name, side, opt.lbl || .58, '#EEEBE4') : null;
+    const lb = opt.renda ? sideLabel(opt.name + '  ' + fmt(opt.renda), side, (opt.lbl || .58) * .92, '#F7A47F') : null;
+    [la, lb].forEach(l => { if (l){ l.position.x = dx; pg.add(l); } });
+    const o = { pg, stick, head, gl, ring, la, lb, side, modes:new Set(modes.split(' ')), h:opt.h || .8, hz:opt.hz || 0, hr: opt.renda ? 3 * opt.renda / 13092 : 0, hc:opt.h || .8, v:0, ph:R() * TAU };
+    pins.push(o); return o;
+  }
+  // Maceió (renda: R$ 9.225, IRPF 2020)
+  pin(new V3(), C.orange, 1.5, 'horizon renda bairros up salsa', { name:'Maceió', side:'l', lbl:.72, h:.8, hz:1.4, ring:true, renda:9225 });
+  // pinos locais de Maceió: polos (Horizon), bairros do investidor (Up!), condomínios e prédios (Salsa)
+  const hood = rng(77); for (let i = 0; i < 12; i++){ const a = i / 12 * TAU + hood() * .3, r = .22 + hood() * .22; pin(new V3(Math.cos(a) * r, 0, Math.sin(a) * r), C.orangeHi, .38, 'horizon up salsa', { h:.28 + hood() * .2 }); }
+  const arcs = [];
+  cities.forEach(([name, la, lo, side, modes, renda, arc]) => {
+    const p = proj(la, lo); const al = modes === 'horizon';
+    const col = arc === 'voo' || arc === 'verao' ? C.orange : al ? C.sage : arc === 'ne' ? C.sage : 0x7E8C7B;
+    pin(p, col, al ? .6 : 1, modes, { name, side, renda: renda || 0, h: al ? .45 : .8, ring: !al, lbl: al ? .22 : .58 });
+    if (!arc) return;
+    const mid = p.clone().multiplyScalar(.5); mid.y = Math.max(1, p.length() * .26);
+    const cv = new THREE.QuadraticBezierCurve3(new V3(0, .05, 0), mid, p.clone().setY(.05));
+    const ag = new THREE.BufferGeometry().setFromPoints(cv.getPoints(64));
+    const mat = arc === 'verao' ? new THREE.LineDashedMaterial({ color:col, dashSize:.2, gapSize:.15, transparent:true, opacity:.8 }) : new THREE.LineBasicMaterial({ color:col, transparent:true, opacity: arc === 'voo' ? .85 : .55 });
+    const line = new THREE.Line(ag, mat); if (arc === 'verao') line.computeLineDistances(); ag.setDrawRange(0, 0); inner.add(line);
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(.06, 8, 8), new THREE.MeshBasicMaterial({ color:C.orangeHi, toneMapped:false })); dot.visible = false; inner.add(dot);
+    arcs.push({ ag, cv, dot, off:R(), modes:new Set(arc === 'verao' ? ['salsa'] : ['up', 'salsa']), v:0 });
+  });
+  let mode = 'horizon';
+  const frame = (sec) => {
+    const m = sec.dataset.map; if (!m) return null; const pts = [];
+    pins.forEach(o => {
+      if (!o.modes.has(m)) return;
+      const p = new V3(); o.pg.getWorldPosition(p);
+      const h = m === 'renda' && o.hr ? o.hr : m === 'horizon' && o.hz ? o.hz : o.h;
+      const head = p.clone(); head.y += h; pts.push(p, head);
+      const L = m === 'renda' && o.lb ? o.lb : o.la; if (!L) return;
+      const f = m === 'horizon' && o.hz ? .38 : 1, w = L.userData.base.x * f, hh = L.userData.base.y * f;
+      let x0, x1, z0, z1;
+      if (o.side === 'l'){ x0 = -w - .25; x1 = -.25; z0 = -hh / 2; z1 = hh / 2; }
+      else if (o.side === 'r'){ x0 = .25; x1 = w + .25; z0 = -hh / 2; z1 = hh / 2; }
+      else if (o.side === 'b'){ x0 = -w / 2; x1 = w / 2; z0 = .7 * hh; z1 = 1.7 * hh; }
+      else { x0 = -w / 2; x1 = w / 2; z0 = -1.5 * hh; z1 = -.5 * hh; }
+      [[x0, z0], [x1, z1], [x0, z1], [x1, z0]].forEach(([x, z]) => pts.push(head.clone().add(new V3(x, 0, z))));
+    });
+    return pts;
+  };
+  mapPiece = { g, frame, update(dt, t, ptr, active){
+    const sec = T.secs[T.active]; if (active && sec.dataset.map) mode = sec.dataset.map;
+    const f = Math.min(1, dt * 3.5);
+    pins.forEach(o => {
+      const tv = active && o.modes.has(mode) ? 1 : 0; o.v += (tv - o.v) * f;
+      o.pg.visible = o.v > .01; if (!o.pg.visible) return;
+      const th = mode === 'renda' && o.hr ? o.hr : mode === 'horizon' && o.hz ? o.hz : o.h; o.hc += (th - o.hc) * f;
+      o.pg.scale.setScalar(Math.max(.001, o.v));
+      o.stick.scale.y = o.hc; o.head.position.y = o.hc; o.gl.position.y = o.hc;
+      const showB = mode === 'renda' && !!o.lb;
+      const lf = mode === 'horizon' && o.hz ? .38 : 1;
+      if (o.la){ o.la.visible = !showB; o.la.position.y = o.hc + .05; o.la.scale.copy(o.la.userData.base).multiplyScalar(lf); }
+      if (o.lb){ o.lb.visible = showB; o.lb.position.y = o.hc + .05; }
+      if (o.ring){ const q = (t * .4 + o.ph) % 1; o.ring.scale.setScalar(1 + q * 1.3); o.ring.material.opacity = .35 * (1 - q) * o.v; }
+    });
+    arcs.forEach(a => { const tv = active && a.modes.has(mode) ? 1 : 0; a.v += (tv - a.v) * Math.min(1, dt * 1.6);
+      a.ag.setDrawRange(0, Math.floor(65 * a.v)); a.dot.visible = a.v > .97; if (a.dot.visible) a.cv.getPointAt((t * .2 + a.off) % 1, a.dot.position); });
+  } };
+  pieces.push(mapPiece);
+}
+
+/* 5 · monthly budget as columns: 1 unit = R$ 1.000 (Meta orange, Google sage) */
+{
+  const g = new THREE.Group(); g.position.copy(P[5]); scene.add(g);
+  const base = new THREE.Mesh(new RoundedBoxGeometry(13.5, .16, 4, 2, .05), new THREE.MeshStandardMaterial({ color:0x181C18, roughness:.85 })); base.position.y = -.08; g.add(base);
+  const cols = [
+    { name:'Horizon', parts:[[3.5, C.orange], [1.5, C.sage]], val:'R$ 5 mil', x:-4.8 },
+    { name:'Up! Studios', parts:[[2.4, C.orange], [.6, C.sage]], val:'R$ 3 mil', x:-1.6 },
+    { name:'Conteúdo', parts:[[1, C.orange]], val:'R$ 1 mil', x:1.6 },
+    { name:'Salsa', ghost:true, val:'a confirmar', x:4.8 }
+  ];
+  const built = [];
+  cols.forEach((c, i) => {
+    const cg = new THREE.Group(); cg.position.x = c.x; g.add(cg);
+    let y = 0, total = 0;
+    if (c.ghost){
+      const eg = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.6, 2.2, 1.6)); eg.translate(0, 1.1, 0);
+      const ln = new THREE.LineSegments(eg, new THREE.LineDashedMaterial({ color:C.mist, dashSize:.16, gapSize:.12, transparent:true, opacity:.45 })); ln.computeLineDistances(); cg.add(ln); total = 2.2;
+    } else {
+      c.parts.forEach(([h, col]) => { const m = new THREE.Mesh(new RoundedBoxGeometry(1.6, h - .04, 1.6, 2, .05), physical(col, { roughness:.35, emissive:col, emissiveIntensity:.12 })); m.position.y = y + h / 2; cg.add(m); y += h; }); total = y;
+    }
+    const v = label(c.val, { size: c.ghost ? .42 : .62, color: c.ghost ? '#A9B2AA' : '#EEEBE4' }); g.add(v);
+    const n = label(c.name, { size:.4, color:'#9EB4AF' }); n.position.set(c.x, -.55, 1.4); g.add(n);
+    built.push({ cg, v, total, x:c.x });
+  });
+  const gl = glow(C.orange, 12, .18); gl.position.set(0, 2, -3); g.add(gl);
+  let grow = 0;
+  pieces.push({ g, update(dt, t, ptr, active){
+    if (active) grow = Math.min(1, grow + dt * .55);
+    built.forEach((b, i) => { const p = Math.min(1, Math.max(0, grow * 1.5 - i * .15)); const e = 1 - Math.pow(1 - p, 3);
+      b.cg.scale.y = Math.max(.001, e); b.v.position.set(b.x, b.total * e + .55, 0); b.v.material.opacity = e; });
+    g.rotation.y = Math.sin(t * .15) * .12;
+  } });
+}
+
+/* 6 · the working week as a row of tiles: Seg, Qua, Qui and Sex light up with their delivery; a pulse walks the week */
+{
+  const g = new THREE.Group(); g.position.copy(P[6]); scene.add(g);
+  const row = new THREE.Group(); row.rotation.x = .18; g.add(row);
+  const base = new THREE.Mesh(new RoundedBoxGeometry(11.2, .12, 2.4, 2, .05), new THREE.MeshStandardMaterial({ color:0x181C18, roughness:.85 })); base.position.y = -.06; row.add(base);
+  const days = [['Seg', 'Relatório semanal'], ['Ter', null], ['Qua', 'Otimizações'], ['Qui', 'Melhores criativos'], ['Sex', 'Resumo da semana']];
+  const tiles = [], wlabels = [];
+  days.forEach(([d, what], i) => {
+    const x = (i - 2) * 2.2, on = !!what;
+    const mat = on ? physical(C.orange, { emissive:C.orange, emissiveIntensity:.25 }) : new THREE.MeshStandardMaterial({ color:0x2B312A, roughness:.7 });
+    const h = on ? .7 : .18;
+    const t = new THREE.Mesh(new RoundedBoxGeometry(1.7, h, 1.7, 3, .08), mat); t.position.set(x, h / 2, 0); row.add(t);
+    const day = label(d, { size: on ? .62 : .42, color: on ? '#F7A47F' : '#7F8A80', serif:on }); day.center.set(.5, 0); day.position.set(x, h + .55, 0); row.add(day); wlabels.push(day);
+    const gl = glow(C.orange, 2.4, on ? .28 : 0); gl.position.set(x, h + .1, 0); row.add(gl);
+    tiles.push({ t, mat, on, x, h, gl });
+  });
+  const pulse = glow(C.orangeHi, 1.1, .95); row.add(pulse);
+  let lv = 0;
+  const weekFrame = () => [[-5.8, 0, 1.3], [5.8, 0, 1.3], [-5.8, 0, -1.3], [5.8, 0, -1.3], [-5.8, 1.9, 0], [5.8, 1.9, 0]].map(a => row.localToWorld(new V3(...a)));
+  pieces.push({ g, frame: weekFrame, update(dt, t, ptr, active){
+    lv += ((active ? 1 : 0) - lv) * Math.min(1, dt * 3); wlabels.forEach(l => { l.material.opacity = lv; l.visible = lv > .02; }); g.visible = lv > .01; g.scale.setScalar(Math.max(.001, .6 + .4 * lv));
+    const u = (t * .12) % 1, px = -5.6 + u * 11.2; pulse.position.set(px, .12, 1.05);
+    tiles.forEach(o => { const near = Math.max(0, 1 - Math.abs(px - o.x) / 1.1);
+      if (o.on){ o.mat.emissiveIntensity = .25 + near * .9; o.gl.material.opacity = .25 + near * .45; } });
+    g.rotation.y = Math.sin(t * .18) * .08;
+  } });
+}
+
+/* 7 · closing mark */
+{
+  const g = new THREE.Group(); g.position.copy(P[7]); scene.add(g);
+  const mark = trilhaMark(1.5); g.add(mark);
+  const gl = glow(C.orange, 12, .45); gl.position.z = -1.5; g.add(gl);
+  let vis = 0; pieces.push({ g, update(dt, t, ptr, active){ vis += ((active ? 1 : 0) - vis) * Math.min(1, dt * 2.5); g.visible = vis > .01; g.scale.setScalar(Math.max(.001, vis)); mark.rotation.z -= dt * .18; mark.rotation.y += ((ptr.x * .4) - mark.rotation.y) * .05; } });
+}
+
+/* 8 · régua de qualificação: four gates (Lead, MQL, SQL, Oportunidade); leads pass through and thin out; the gates the section talks about light up */
+{
+  const g = new THREE.Group(); g.position.copy(P[8]); scene.add(g);
+  const gates = [['Lead', 'Marketing', 1.7, C.mist], ['MQL', 'Marketing', 1.4, C.peach], ['SQL', 'SDR Pontozero', 1.1, C.orange], ['Oportunidade', 'Corretor Markup', .85, C.sage]];
+  const xs = [-4.8, -1.6, 1.6, 4.8];
+  const rlabels = [];
+  const rings = gates.map(([name, who, r, c], i) => {
+    const mat = physical(c, { emissive:c, emissiveIntensity:.15 });
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r, .08, 24, 140), mat); m.position.set(xs[i], 0, 0); m.rotation.y = Math.PI / 2 - .55; g.add(m);
+    const gl = glow(c, r * 3.2, .12); gl.position.set(xs[i], 0, -.3); g.add(gl);
+    const a = label(name, { size:.6, color:'#EEEBE4' }); a.center.set(.5, 0); a.position.set(xs[i], r + .3, 0); g.add(a);
+    const b = label(who, { size:.4, color:'#9EB4AF' }); b.center.set(.5, 1); b.position.set(xs[i], -r - .3, 0); g.add(b); rlabels.push(a, b);
+    return { mat, gl, key:name.toLowerCase(), w:0 };
+  });
+  const N = small() ? 160 : 280; const pos = new Float32Array(N * 3); const st = [];
+  const spawn = (o, fresh) => { o.x = fresh ? -7 + Math.random() * 13 : -7.2; o.a = Math.random() * TAU; o.r = Math.sqrt(Math.random()); o.v = 1.2 + Math.random() * .8; const q = Math.random(); o.end = q < .35 ? xs[1] : q < .65 ? xs[2] : q < .85 ? xs[3] : 7.5; o.fall = 0; };
+  for (let i = 0; i < N; i++){ const o = {}; spawn(o, true); st.push(o); }
+  const radAt = x => x <= xs[0] ? 1.5 : x >= xs[3] ? .7 : (() => { for (let i = 0; i < 3; i++) if (x < xs[i + 1]){ const t = (x - xs[i]) / (xs[i + 1] - xs[i]); return (gates[i][2] + (gates[i + 1][2] - gates[i][2]) * t) * .85; } })();
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.add(new THREE.Points(geo, pointsMat(.14, C.orangeHi, .95)));
+  const reguaFrame = () => { const pts = []; gates.forEach(([n, w, r], i) => { [[-2.2, r + 1], [2.2, r + 1], [-2.2, -r - .8], [2.2, -r - .8], [0, 0]].forEach(([x, y]) => { const p = new V3(xs[i] + x * (i === 3 ? 1.3 : 1), y, 0); g.localToWorld(p); pts.push(p); }); }); return pts; };
+  pieces.push({ g, frame: reguaFrame, update(dt, t, ptr, active){
+    const sec = T.secs[T.active]; const on = active && sec.dataset.gate ? sec.dataset.gate : 'all';
+    this.lv = (this.lv || 0) + ((active ? 1 : 0) - (this.lv || 0)) * Math.min(1, dt * 3); rlabels.forEach(l => { l.material.opacity = this.lv; l.visible = this.lv > .02; });
+    rings.forEach(rg => { const tv = on === 'all' || on.split(' ').includes(rg.key) ? 1 : .15; rg.w += (tv - rg.w) * Math.min(1, dt * 3); rg.mat.emissiveIntensity = .1 + rg.w * .45; rg.gl.material.opacity = .05 + rg.w * .2; });
+    for (let i = 0; i < N; i++){ const o = st[i];
+      if (o.fall > 0){ o.fall += dt; o.y -= dt * 2.2; if (o.fall > 1.2) spawn(o, false); }
+      else { o.x += dt * o.v; if (o.x >= o.end){ o.fall = .001; o.y = Math.sin(o.a) * radAt(o.x) * o.r; } }
+      const rr = radAt(Math.min(o.x, 7)) * o.r;
+      pos[i*3] = o.x; pos[i*3+1] = o.fall > 0 ? o.y : Math.sin(o.a) * rr; pos[i*3+2] = Math.cos(o.a) * rr * .6;
+      if (o.fall <= 0) o.a += dt * .6;
+    }
+    geo.attributes.position.needsUpdate = true; g.rotation.y = Math.sin(t * .15) * .1;
+  } });
+}
+
+/* ---------- the trilha itself: a path linking every stage, with leads flowing along it ---------- */
+const pathPts = [0, 1, 2, 3, 4, 5, 8, 6, 7].map((n, i) => P[n].clone().add(new V3(i % 2 ? -2.5 : 2.5, -3.6, 1.5)));
+pathPts.unshift(P[0].clone().add(new V3(-6, -3.6, 12)));
+pathPts.push(P[7].clone().add(new V3(0, -3.6, -14)));
+const path = new THREE.CatmullRomCurve3(pathPts, false, 'centripetal');
+scene.add(new THREE.Mesh(new THREE.TubeGeometry(path, 600, .03, 6), new THREE.MeshBasicMaterial({ color:C.orange, transparent:true, opacity:.55, toneMapped:false })));
+const leads = flowDots(path, small() ? 70 : 120, .055, C.orangeHi); scene.add(leads.mesh);
+
+/* ambient dust */
+{
+  const N = small() ? 1400 : 2800; const p = new Float32Array(N * 3), c = new Float32Array(N * 3);
+  const pal = [new THREE.Color(0x9EB4AF), new THREE.Color(0xE8E8E4), new THREE.Color(0xF7A47F)];
+  for (let i = 0; i < N; i++){ p[i*3] = (R() - .5) * 70; p[i*3+1] = (R() - .5) * 40 - 2; p[i*3+2] = 25 - R() * 215;
+    const q = R(), col = q < .7 ? pal[0] : q < .9 ? pal[1] : pal[2]; const b = .35 + R() * .5; c[i*3] = col.r * b; c[i*3+1] = col.g * b; c[i*3+2] = col.b * b; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  const dust = new THREE.Points(geo, pointsMat(.12, 0xffffff, .85, true)); scene.add(dust);
+  pieces.push({ g:dust, update(dt){ dust.rotation.y += dt * .004; dust.position.y = Math.sin(performance.now() * .00008) * .6; } });
+}
+
+/* ---------- camera keyframes from the sections ---------- */
+const UP = new V3(0, 1, 0);
+const LIFT = [0, 0, 0, 1, 0, 2.6, 0, 0, 0];
+let cams = [];
+const fitCam = new THREE.PerspectiveCamera();
+function fitView(c, pos0, pts, side, panel){
+  fitCam.fov = camera.fov; fitCam.aspect = camera.aspect; fitCam.near = .1; fitCam.far = 400; fitCam.updateProjectionMatrix();
+  const W = innerWidth, H = innerHeight, pr = panel.getBoundingClientRect();
+  const nx = x => x / W * 2 - 1, ny = y => 1 - y / H * 2;
+  const rx0 = side === 'l' ? nx(pr.right + 32) : nx(32), rx1 = side === 'l' ? nx(W - 72) : nx(pr.left - 32);
+  const ry0 = ny(H - 32), ry1 = ny(88);
+  if (rx1 - rx0 < .2) return null;
+  const dir = pos0.clone().sub(c); const d0 = dir.length(); dir.normalize();
+  const tan = Math.tan(THREE.MathUtils.degToRad(fitCam.fov / 2));
+  for (let s = .4; s <= 9; s += .04){
+    const pos = c.clone().addScaledVector(dir, d0 * s), tgt = c.clone(); let ok = false, bad = false;
+    for (let it = 0; it < 4; it++){
+      fitCam.position.copy(pos); fitCam.lookAt(tgt); fitCam.updateMatrixWorld(); fitCam.matrixWorldInverse.copy(fitCam.matrixWorld).invert();
+      let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
+      for (const p of pts){ const n = p.clone().project(fitCam); if (n.z > 1 || n.z < -1){ bad = true; break; } x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x); y0 = Math.min(y0, n.y); y1 = Math.max(y1, n.y); }
+      if (bad) break;
+      ok = x1 - x0 <= rx1 - rx0 && y1 - y0 <= ry1 - ry0 && x0 >= rx0 - .01 && x1 <= rx1 + .01 && y0 >= ry0 - .01 && y1 <= ry1 + .01;
+      const dist = pos.distanceTo(tgt), hw = tan * fitCam.aspect * dist, hh = tan * dist;
+      const right = new V3().setFromMatrixColumn(fitCam.matrixWorld, 0), up = new V3().setFromMatrixColumn(fitCam.matrixWorld, 1);
+      const pan = new V3().addScaledVector(right, -((rx0 + rx1) / 2 - (x0 + x1) / 2) * hw).addScaledVector(up, -((ry0 + ry1) / 2 - (y0 + y1) / 2) * hh);
+      pos.add(pan); tgt.add(pan);
+    }
+    if (ok && !bad) return { pos, tgt };
+  }
+  return null;
+}
+function autoFrame(g){
+  const pts = [], box = new THREE.Box3(), tmp = new THREE.Box3();
+  g.updateMatrixWorld(true);
+  g.traverse(o => {
+    if (o.isPoints || o.isLine || o.userData.noFrame) return;
+    if (o.isSprite){
+      if (!o.userData.text) return;
+      const p = new V3(); o.getWorldPosition(p); const sc = new V3(); o.getWorldScale(sc);
+      const x0 = -o.center.x * sc.x, x1 = (1 - o.center.x) * sc.x, y0 = -o.center.y * sc.y, y1 = (1 - o.center.y) * sc.y;
+      [[x0, y0], [x1, y1], [x0, y1], [x1, y0]].forEach(([x, y]) => pts.push(p.clone().add(new V3(x, y, 0))));
+      return;
+    }
+    if (o.isMesh && o.geometry){ if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.union(tmp); }
+  });
+  if (!box.isEmpty()) for (let i = 0; i < 8; i++) pts.push(new V3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+  return pts;
+}
+function buildCams(){
+  scene.updateMatrixWorld(true);
+  [1, 2, 3, 5].forEach(i => { if (pieces[i] && !pieces[i].frame) pieces[i].frame = () => autoFrame(pieces[i].g); });
+  cams = T.secs.map(s => {
+    const [p, a, d, h] = s.dataset.cam.split(',').map(Number); const side = s.dataset.side; const c = (s.dataset.focus === 'hub' ? HUB : P[p]).clone(); c.y += LIFT[p];
+    const dd = small() ? d * 1.3 : d;
+    const pos = new V3(c.x + Math.sin(a) * dd, c.y + h, c.z + Math.cos(a) * dd);
+    const dir = c.clone().sub(pos).normalize(); const right = new V3().crossVectors(dir, UP).normalize();
+    const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect * dd;
+    // where the object should sit on screen (NDC x): centre of the free space beside the panel
+    let ndc = 0;
+    if (!small() && (side === 'l' || side === 'r')){
+      const panel = s.querySelector('.panel');
+      if (s.dataset.k) ndc = side === 'l' ? +s.dataset.k : -s.dataset.k;
+      else if (panel){ const r = panel.getBoundingClientRect(); ndc = side === 'l' ? r.right / innerWidth - .06 : r.left / innerWidth - .97; }
+      else ndc = side === 'l' ? .42 : -.42;
+      if (s.dataset.kadd) ndc += side === 'l' ? +s.dataset.kadd : -s.dataset.kadd;
+    }
+    const k = -ndc * half;
+    const tgt = c.clone().addScaledVector(right, k); if (small()) tgt.y -= dd * (s.classList.contains('bare-sec') ? .34 : .16); else if (side === 'w') tgt.y += dd * .05;
+    const pc = pieces[p], panel = s.querySelector('.panel');
+    if (!small() && pc && pc.frame && panel && (side === 'l' || side === 'r')){
+      const pts = pc.frame(s); if (pts && pts.length){ const f = fitView(c, pos, pts, side, panel); if (f) return { pos:f.pos, tgt:f.tgt, piece:p }; }
+    }
+    return { pos, tgt, piece:p };
+  });
+}
+function size(){
+  renderer.setPixelRatio(Math.min(devicePixelRatio, small() ? 1.5 : 1.75));
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); buildCams();
+}
+size(); addEventListener('resize', size);
+
+const ptr = { x:0, y:0 }, ptrS = { x:0, y:0 };
+addEventListener('pointermove', e => { ptr.x = e.clientX / innerWidth * 2 - 1; ptr.y = e.clientY / innerHeight * 2 - 1; }, { passive:true });
+
+const camPos = new V3(), camTgt = new V3(), wantPos = new V3(), wantTgt = new V3();
+{ const p = T.progress(); camPos.copy(cams[p.i].pos); camTgt.copy(cams[p.i].tgt); }
+
+const clock = new THREE.Clock();
+let time = 0;
+function frame(){ step(Math.min(clock.getDelta(), .05)); requestAnimationFrame(frame); }
+window.__step = (n = 90) => { for (let i = 0; i < n; i++) step(1 / 30); return 'ok'; };
+function step(dt){ time += reduce ? dt * .25 : dt;
+  const pr = T.progress(); const a = cams[pr.i], b = cams[Math.min(pr.i + 1, cams.length - 1)];
+  const th = Math.min(1, Math.max(0, (pr.t - .28) / .44)); const e = th * th * (3 - 2 * th);
+  wantPos.lerpVectors(a.pos, b.pos, e); wantTgt.lerpVectors(a.tgt, b.tgt, e);
+  const hop = a.pos.distanceTo(b.pos); wantPos.y += Math.sin(Math.PI * e) * Math.min(hop * .12, 4);
+  const kf = (reduce || window.__snap) ? 1 : 1 - Math.exp(-dt * 3.2);
+  camPos.lerp(wantPos, kf); camTgt.lerp(wantTgt, kf);
+  ptrS.x += (ptr.x - ptrS.x) * .05; ptrS.y += (ptr.y - ptrS.y) * .05;
+  camera.position.copy(camPos); if (!reduce){ camera.position.x += ptrS.x * .45; camera.position.y -= ptrS.y * .25; }
+  camera.lookAt(camTgt);
+  const activePiece = cams[T.active] ? cams[T.active].piece : 0;
+  pieces.forEach((pc, i) => pc.update(dt, time, ptrS, i === activePiece));
+  leads.update(time, .006);
+  renderer.render(scene, camera);
+}
+document.documentElement.classList.add('gl-on');
+window.__dbg = { camera, HUB, P, scene, pieces, fitView, get cams(){ return cams; } };
+requestAnimationFrame(frame);
+</script>
+
+</html>
